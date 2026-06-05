@@ -47,6 +47,28 @@ The next AI will pick up from there.
 
 ---
 
+## Model Selection Guide
+
+The recommended Claude model depends on task complexity and budget:
+
+| Task Type | Recommended Model | When to Use | Benefits |
+|-----------|------------------|-------------|----------|
+| **Architecture** | claude-opus-4-8 | System design, major refactors, complex decisions | Extended thinking mode (reasoning) |
+| **Code Review** | claude-opus-4-8 | Peer review, security audit, performance analysis | Extended thinking for thorough analysis |
+| **Refactoring** | claude-sonnet-4-6 | Code cleanup, pattern improvements, modernization | Best balance of capability and cost |
+| **Bugfix** | claude-sonnet-4-6 | Fixing bugs, debugging issues | Sufficient for targeted fixes |
+| **Feature** | claude-sonnet-4-6 | New functionality, feature development | Good cost/capability ratio |
+| **Tests** | claude-sonnet-4-6 | Test writing, test maintenance | Capable for test generation |
+| **Documentation** | claude-haiku-4-5 | Docs, comments, content writing | Lightweight, cost-effective |
+
+**Extended Thinking Mode**: Recommended for architecture and code review tasks. Use this when problem-solving requires deep analysis.
+
+**Default**: This project uses `claude-sonnet-4-6` by default, with Opus reserved for critical decisions.
+
+Check `.ai/config.json` for this project's specific model recommendations.
+
+---
+
 ## Project Quick-Read
 
 ```

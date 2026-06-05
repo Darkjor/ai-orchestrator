@@ -10,5 +10,19 @@
     "*.pem",
     "venv/"
   ],
-  "enforce_changelog": false
+  "enforce_changelog": false,
+  "models": {
+    "default": "claude-sonnet-4-6",
+    "recommendations": {
+      "architecture": "claude-opus-4-8",
+      "code_review": "claude-opus-4-8",
+      "refactoring": "claude-sonnet-4-6",
+      "bugfix": "claude-sonnet-4-6",
+      "feature": "claude-sonnet-4-6",
+      "tests": "claude-sonnet-4-6",
+      "docs": "claude-haiku-4-5-20251001"
+    },
+    "reasoning_tasks": ["architecture", "code_review"],
+    "budget_preference": "prefer_sonnet"
+  }
 }

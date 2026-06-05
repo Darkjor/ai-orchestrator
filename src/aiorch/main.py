@@ -2,6 +2,7 @@ import os
 import shutil
 import json
 import re
+import datetime
 import subprocess
 import typer
 from rich.console import Console
@@ -86,7 +87,7 @@ def triage():
         table.add_column("Severity", style="bold")
         table.add_column("Title")
         table.add_column("Status", justify="right")
-        
+
         for alert in alerts:
             sev_color = "red" if alert["severity"] == "P0" else ("yellow" if alert["severity"] == "P1" else "blue")
             table.add_row(
@@ -97,7 +98,31 @@ def triage():
             )
         console.print(table)
     else:
-        console.print("[green]✔ No active alerts found in ALERTS.md[/green]")
+        console.print("[green][OK] No active alerts found in ALERTS.md[/green]")
+
+    console.print("\n[bold]Recommended Claude Models[/bold]")
+    config_path = os.path.join(".ai", "config.json")
+    models_config = None
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                config = json.load(f)
+            models_config = config.get("models", {})
+        except Exception:
+            pass
+
+    if models_config:
+        default_model = models_config.get("default", "claude-sonnet-4-6")
+        recommendations = models_config.get("recommendations", {})
+        reasoning_tasks = models_config.get("reasoning_tasks", [])
+
+        console.print(f"Default: [cyan]{default_model}[/cyan]")
+        if recommendations:
+            for task_type, model in recommendations.items():
+                reasoning_note = " (with extended thinking)" if task_type in reasoning_tasks else ""
+                console.print(f"  {task_type}: [yellow]{model}{reasoning_note}[/yellow]")
+    else:
+        console.print("[dim]No model recommendations configured in .ai/config.json[/dim]")
         
     console.print("\n[bold]Checking for git merge conflicts...[/bold]")
     conflict_found = False
@@ -112,12 +137,12 @@ def triage():
                 with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                     content = f.read()
                     if "<<<<<<<" in content and "=======" in content:
-                        console.print(f"[red]✗ Merge conflict found in {file_path}[/red]")
+                        console.print(f"[red][ERROR] Merge conflict found in {file_path}[/red]")
                         conflict_found = True
             except Exception:
                 pass
     if not conflict_found:
-        console.print("[green]✔ No active merge conflicts detected.[/green]")
+        console.print("[green][OK] No active merge conflicts detected.[/green]")
         
     console.print("\n[bold]Checking for exposed secrets...[/bold]")
     staged_secrets = []
@@ -137,9 +162,9 @@ def triage():
             
     if staged_secrets:
         for sec in set(staged_secrets):
-            console.print(f"[yellow]⚠ Warning: Potential secret file detected: {sec}[/yellow]")
+            console.print(f"[yellow][WARN] Warning: Potential secret file detected: {sec}[/yellow]")
     else:
-        console.print("[green]✔ No secret/credential leaks detected.[/green]")
+        console.print("[green][OK] No secret/credential leaks detected.[/green]")
 
     config_path = os.path.join(".ai", "config.json")
     if os.path.exists(config_path):
@@ -151,15 +176,15 @@ def triage():
                 console.print(f"\n[bold]Running test command: {test_cmd}...[/bold]")
                 test_res = subprocess.run(test_cmd, shell=True, capture_output=True, text=True)
                 if test_res.returncode == 0:
-                    console.print("[green]✔ Tests passed successfully![/green]")
+                    console.print("[green][OK] Tests passed successfully![/green]")
                 else:
-                    console.print(f"[red]✗ Test command failed with exit code {test_res.returncode}[/red]")
+                    console.print(f"[red][ERROR] Test command failed with exit code {test_res.returncode}[/red]")
                     if test_res.stdout:
                         console.print(test_res.stdout)
                     if test_res.stderr:
                         console.print(test_res.stderr)
         except Exception as e:
-            console.print(f"[yellow]⚠ Warning: Could not run test command. Reason: {e}[/yellow]")
+            console.print(f"[yellow][WARN] Warning: Could not run test command. Reason: {e}[/yellow]")
 
 @app.command()
 def check():
@@ -169,7 +194,6 @@ def check():
         raise typer.Exit(0)
         
     try:
-        # Get staged files
         res = subprocess.run(["git", "diff", "--cached", "--name-only"], capture_output=True, text=True, check=True)
         staged_files = [line.strip() for line in res.stdout.splitlines() if line.strip()]
     except Exception as e:
@@ -179,7 +203,6 @@ def check():
     if not staged_files:
         raise typer.Exit(0)
         
-    # Filter files: codebase files (exclude .ai, .gitignore, docs, etc.)
     codebase_changed = False
     ai_changed = False
     
@@ -187,8 +210,6 @@ def check():
         if f.startswith(".ai/"):
             ai_changed = True
         elif not any(f.startswith(prefix) for prefix in [".git", "docs/"]):
-            # Ignore standard ignored files like .gitignore itself or README if necessary,
-            # but let's count any code modification outside .ai and git configuration.
             if f not in [".gitignore", "pyproject.toml"]:
                 codebase_changed = True
                 
@@ -202,7 +223,7 @@ def check():
         ))
         raise typer.Exit(1)
         
-    console.print("[green]✔ AI orchestrator context update verified.[/green]")
+    console.print("[green][OK] AI orchestrator context update verified.[/green]")
     raise typer.Exit(0)
 
 @app.command("hook-install")
@@ -229,13 +250,192 @@ fi
     with open(hook_path, "w", encoding="utf-8", newline="\n") as f:
         f.write(hook_content)
         
-    # Make executable
     try:
         os.chmod(hook_path, 0o755)
     except Exception as e:
         console.print(f"[yellow]Warning: Could not set executable permission on hook. Reason: {e}[/yellow]")
         
-    console.print(f"[green]✔ Git pre-commit hook installed at {hook_path}[/green]")
+    console.print(f"[green][OK] Git pre-commit hook installed at {hook_path}[/green]")
+
+@app.command()
+def handoff():
+    """Run interactive handoff wizard to update .ai documentation and commit changes."""
+    if not os.path.exists(".ai"):
+        console.print("[red]Error: .ai/ orchestrator folder not found. Run 'ai-orch init' first.[/red]")
+        raise typer.Exit(1)
+        
+    console.print(Panel("[bold green]AI Orchestrator — Session Handoff Wizard[/bold green]", expand=False))
+
+    config_path = os.path.join(".ai", "config.json")
+    models_config = None
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                config = json.load(f)
+            models_config = config.get("models", {})
+        except Exception:
+            pass
+
+    # 1. Task Type Selection
+    valid_task_types = ["architecture", "code_review", "refactoring", "bugfix", "feature", "tests", "docs"]
+    task_type = typer.prompt(
+        "What type of work did you complete? (architecture/code_review/refactoring/bugfix/feature/tests/docs)",
+        default="feature"
+    )
+    if task_type not in valid_task_types:
+        task_type = "feature"
+
+    if models_config:
+        recommended_model = models_config.get("recommendations", {}).get(task_type, models_config.get("default", "claude-sonnet-4-6"))
+        reasoning_tasks = models_config.get("reasoning_tasks", [])
+        console.print(f"\n[cyan]ℹ Recommended model: {recommended_model}[/cyan]")
+        if task_type in reasoning_tasks:
+            console.print("[yellow]✓ This task benefits from extended thinking mode[/yellow]")
+
+    # 2. Accomplishments
+    accomplishments = typer.prompt("What was accomplished in this block? (comma-separated, or empty to skip)", default="", show_default=False)
+
+    # 3. Changed files
+    changed_files = typer.prompt("What files or components were recently changed? (comma-separated, or empty to skip)", default="", show_default=False)
+
+    # 4. Blocker/Alert
+    add_alert = typer.confirm("Do you want to add a new blocker/alert?", default=False)
+    new_alert_data = None
+    if add_alert:
+        alert_id = typer.prompt("Alert ID (e.g. ALERT-002)")
+        alert_title = typer.prompt("Short description")
+        alert_severity = typer.prompt("Severity (P0 / P1 / P2)", default="P2")
+        new_alert_data = {
+            "id": alert_id,
+            "title": alert_title,
+            "severity": alert_severity.upper()
+        }
+
+    # 5. Design Decision
+    add_decision = typer.confirm("Do you want to document a new design decision?", default=False)
+    new_dec_data = None
+    if add_decision:
+        dec_id = typer.prompt("Decision ID (e.g. DEC-002)")
+        dec_title = typer.prompt("Short title")
+        dec_context = typer.prompt("Decision context / rationale")
+        new_dec_data = {
+            "id": dec_id,
+            "title": dec_title,
+            "context": dec_context
+        }
+
+    # 6. Git Commit
+    make_commit = typer.confirm("Do you want to stage all changes and create a git commit?", default=False)
+    commit_data = None
+    if make_commit:
+        block_num = typer.prompt("Block number (e.g. 3)")
+        commit_type = typer.prompt("Commit type (feat/fix/chore/docs)")
+        commit_msg = typer.prompt("Commit message description")
+        commit_data = {
+            "block": block_num,
+            "type": commit_type,
+            "msg": commit_msg
+        }
+
+    # --- PROCESS UPDATES ---
+    today_str = datetime.date.today().strftime("%Y-%m-%d")
+    
+    # Update CONTEXT.md
+    context_path = os.path.join(".ai", "CONTEXT.md")
+    if os.path.exists(context_path):
+        with open(context_path, "r", encoding="utf-8") as f:
+            content = f.read()
+            
+        content = re.sub(
+            r"## Current State \(updated: [^\)]+\)", 
+            f"## Current State (updated: {today_str})", 
+            content
+        )
+        
+        if accomplishments:
+            lines = content.splitlines()
+            for i, line in enumerate(lines):
+                if "**What works right now:**" in line:
+                    new_bullets = [f"- {acc.strip()}" for acc in accomplishments.split(",") if acc.strip()]
+                    lines = lines[:i+1] + new_bullets + lines[i+1:]
+                    break
+            content = "\n".join(lines)
+            
+        if changed_files:
+            lines = content.splitlines()
+            for i, line in enumerate(lines):
+                if "**Most recently changed:**" in line:
+                    new_bullets = [f"- {cf.strip()}" for cf in changed_files.split(",") if cf.strip()]
+                    next_sec_idx = len(lines)
+                    for j in range(i+1, len(lines)):
+                        if lines[j].strip().startswith("---") or lines[j].strip().startswith("##"):
+                            next_sec_idx = j
+                            break
+                    lines = lines[:i+1] + new_bullets + lines[next_sec_idx:]
+                    break
+            content = "\n".join(lines)
+            
+        with open(context_path, "w", encoding="utf-8") as f:
+            f.write(content)
+        console.print("[green][OK] Updated .ai/CONTEXT.md[/green]")
+
+    # Update ALERTS.md
+    if new_alert_data:
+        alerts_path = os.path.join(".ai", "ALERTS.md")
+        if os.path.exists(alerts_path):
+            with open(alerts_path, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+                
+            header_pattern = f"## {new_alert_data['severity']}"
+            inserted = False
+            for i, line in enumerate(lines):
+                if header_pattern in line:
+                    alert_md = (
+                        f"\n### [{new_alert_data['id']}] {new_alert_data['title']}\n"
+                        f"**Severity**: {new_alert_data['severity']}\n"
+                        f"**Status**:   Open\n"
+                        f"**Owner**:    None\n"
+                        f"**Discovered**: {today_str}\n"
+                        f"**Impact**: [TBD]\n"
+                        f"**Fix**: [TBD]\n"
+                    )
+                    lines.insert(i+1, alert_md)
+                    inserted = True
+                    break
+            if inserted:
+                with open(alerts_path, "w", encoding="utf-8") as f:
+                    f.writelines(lines)
+                console.print(f"[green][OK] Added alert {new_alert_data['id']} to .ai/ALERTS.md[/green]")
+
+    # Update DECISIONS.md
+    if new_dec_data:
+        decisions_path = os.path.join(".ai", "DECISIONS.md")
+        if os.path.exists(decisions_path):
+            decision_md = (
+                f"\n## [{new_dec_data['id']}] {new_dec_data['title']}\n"
+                f"**Date**: {today_str}\n"
+                f"**Status**: Active\n"
+                f"**Context**: {new_dec_data['context']}\n"
+                f"**Decision**: [TBD]\n"
+                f"**Rationale**: [TBD]\n"
+                f"**Consequences**: [TBD]\n"
+                f"**Revisit when**: [TBD]\n"
+            )
+            with open(decisions_path, "a", encoding="utf-8") as f:
+                f.write(decision_md)
+            console.print(f"[green][OK] Recorded decision {new_dec_data['id']} in .ai/DECISIONS.md[/green]")
+
+    # Process Git commit
+    if commit_data:
+        try:
+            # Stage everything
+            subprocess.run(["git", "add", "."], check=True)
+            # Commit
+            commit_msg_full = f"[{commit_data['block']}] {commit_data['type']}: {commit_data['msg']}"
+            subprocess.run(["git", "commit", "-m", commit_msg_full], check=True)
+            console.print(f"[green][OK] Successfully created commit: {commit_msg_full}[/green]")
+        except Exception as e:
+            console.print(f"[red][ERROR] Git commit failed: {e}[/red]")
 
 if __name__ == "__main__":
     app()

@@ -48,6 +48,18 @@
 
 ---
 
+## Recommended Models for Next Block
+
+**Primary**: claude-sonnet-4-6 (balanced capability and cost)
+
+**For architecture/design decisions**: claude-opus-4-8 (with extended thinking)
+
+**For documentation**: claude-haiku-4-5-20251001 (lightweight)
+
+See `.ai/config.json` and ORCHESTRATOR.md for detailed model selection guide.
+
+---
+
 ## How to Update This File
 
 Update after:
