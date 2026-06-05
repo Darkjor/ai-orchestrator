@@ -17,14 +17,13 @@ def parse_alerts(alerts_path: str):
         return []
     
     alerts = []
-    current_severity = "P2" # Default fallback
+    current_severity = "P2"
     
     with open(alerts_path, "r", encoding="utf-8") as f:
         lines = f.readlines()
         
     for line in lines:
         stripped = line.strip()
-        # Detect section severity
         if stripped.startswith("## P0"):
             current_severity = "P0"
         elif stripped.startswith("## P1"):
@@ -34,9 +33,7 @@ def parse_alerts(alerts_path: str):
         elif stripped.startswith("## RESOLVED"):
             current_severity = "RESOLVED"
         
-        # Detect alert item
         if stripped.startswith("### [ALERT-"):
-            # Extract ID and title
             match = re.search(r"### \[(ALERT-\d+)\]\s*(.*)", stripped)
             if match:
                 alert_id = match.group(1)
@@ -78,13 +75,11 @@ def triage():
         console.print("[red]Error: .ai/ orchestrator folder not found. Run 'ai-orch init' first.[/red]")
         raise typer.Exit(1)
         
-    # 1. Parse active alerts
     alerts_path = os.path.join(".ai", "ALERTS.md")
     alerts = parse_alerts(alerts_path)
     
     console.print(Panel("[bold blue]AI Orchestrator — Project Triage[/bold blue]", expand=False))
     
-    # Render Alerts Table
     if alerts:
         table = Table(title="Active Alerts", show_header=True, header_style="bold magenta")
         table.add_column("ID", style="dim", width=12)
@@ -94,7 +89,7 @@ def triage():
         
         for alert in alerts:
             sev_color = "red" if alert["severity"] == "P0" else ("yellow" if alert["severity"] == "P1" else "blue")
-            table.add_column = table.add_row(
+            table.add_row(
                 alert["id"],
                 f"[{sev_color}]{alert['severity']}[/{sev_color}]",
                 alert["title"],
@@ -104,16 +99,13 @@ def triage():
     else:
         console.print("[green]✔ No active alerts found in ALERTS.md[/green]")
         
-    # 2. Check for Git merge conflicts
     console.print("\n[bold]Checking for git merge conflicts...[/bold]")
     conflict_found = False
     for root, dirs, files in os.walk("."):
-        # Skip common directories
         if any(ignored in root for ignored in [".git", "venv", ".venv", "node_modules", "__pycache__", ".pytest_cache"]):
             continue
         for file in files:
             file_path = os.path.join(root, file)
-            # Only read text files
             if not file.endswith((".py", ".gd", ".go", ".js", ".ts", ".json", ".md", ".txt", ".html", ".xml", ".yml", ".yaml")):
                 continue
             try:
@@ -127,10 +119,8 @@ def triage():
     if not conflict_found:
         console.print("[green]✔ No active merge conflicts detected.[/green]")
         
-    # 3. Check for exposed secrets/credentials
     console.print("\n[bold]Checking for exposed secrets...[/bold]")
     staged_secrets = []
-    # If it is a git repo, check staged files
     if os.path.exists(".git"):
         try:
             res = subprocess.run(["git", "diff", "--cached", "--name-only"], capture_output=True, text=True, check=True)
@@ -141,7 +131,6 @@ def triage():
         except Exception:
             pass
             
-    # Check current directory for unstaged plain secrets
     for f in os.listdir("."):
         if f.endswith(".env") or f.endswith(".pem") or f.endswith(".key"):
             staged_secrets.append(f)
@@ -152,7 +141,6 @@ def triage():
     else:
         console.print("[green]✔ No secret/credential leaks detected.[/green]")
 
-    # 4. Run test command if configured
     config_path = os.path.join(".ai", "config.json")
     if os.path.exists(config_path):
         try:
@@ -161,7 +149,6 @@ def triage():
             test_cmd = config.get("test_command")
             if test_cmd:
                 console.print(f"\n[bold]Running test command: {test_cmd}...[/bold]")
-                # Run the command in the shell
                 test_res = subprocess.run(test_cmd, shell=True, capture_output=True, text=True)
                 if test_res.returncode == 0:
                     console.print("[green]✔ Tests passed successfully![/green]")
@@ -173,6 +160,82 @@ def triage():
                         console.print(test_res.stderr)
         except Exception as e:
             console.print(f"[yellow]⚠ Warning: Could not run test command. Reason: {e}[/yellow]")
+
+@app.command()
+def check():
+    """Verify that .ai context is updated when other changes are staged."""
+    if not os.path.exists(".git"):
+        console.print("[yellow]Not a git repository. Skipping context check.[/yellow]")
+        raise typer.Exit(0)
+        
+    try:
+        # Get staged files
+        res = subprocess.run(["git", "diff", "--cached", "--name-only"], capture_output=True, text=True, check=True)
+        staged_files = [line.strip() for line in res.stdout.splitlines() if line.strip()]
+    except Exception as e:
+        console.print(f"[yellow]Git check failed: {e}. Skipping.[/yellow]")
+        raise typer.Exit(0)
+        
+    if not staged_files:
+        raise typer.Exit(0)
+        
+    # Filter files: codebase files (exclude .ai, .gitignore, docs, etc.)
+    codebase_changed = False
+    ai_changed = False
+    
+    for f in staged_files:
+        if f.startswith(".ai/"):
+            ai_changed = True
+        elif not any(f.startswith(prefix) for prefix in [".git", "docs/"]):
+            # Ignore standard ignored files like .gitignore itself or README if necessary,
+            # but let's count any code modification outside .ai and git configuration.
+            if f not in [".gitignore", "pyproject.toml"]:
+                codebase_changed = True
+                
+    if codebase_changed and not ai_changed:
+        console.print(Panel(
+            "[red]Error: Staged files detected but .ai/ documentation context was not updated.[/red]\n\n"
+            "Please run [bold]ai-orch handoff[/bold] or manually update [bold].ai/CONTEXT.md[/bold] "
+            "to describe your changes before committing.",
+            title="AI Orchestrator Guard",
+            expand=False
+        ))
+        raise typer.Exit(1)
+        
+    console.print("[green]✔ AI orchestrator context update verified.[/green]")
+    raise typer.Exit(0)
+
+@app.command("hook-install")
+def hook_install():
+    """Install git pre-commit hook to automate context checking."""
+    if not os.path.exists(".git"):
+        console.print("[red]Error: Not a git repository. Run 'git init' first.[/red]")
+        raise typer.Exit(1)
+        
+    hook_dir = os.path.join(".git", "hooks")
+    os.makedirs(hook_dir, exist_ok=True)
+    hook_path = os.path.join(hook_dir, "pre-commit")
+    
+    hook_content = """#!/bin/sh
+# AI Orchestrator pre-commit validation hook
+
+if command -v ai-orch >/dev/null 2>&1; then
+  ai-orch check
+else
+  python -m aiorch.main check
+fi
+"""
+    
+    with open(hook_path, "w", encoding="utf-8", newline="\n") as f:
+        f.write(hook_content)
+        
+    # Make executable
+    try:
+        os.chmod(hook_path, 0o755)
+    except Exception as e:
+        console.print(f"[yellow]Warning: Could not set executable permission on hook. Reason: {e}[/yellow]")
+        
+    console.print(f"[green]✔ Git pre-commit hook installed at {hook_path}[/green]")
 
 if __name__ == "__main__":
     app()
