@@ -16,13 +16,13 @@ def parse_alerts(alerts_path: str):
     """Parse alerts file and return open P0, P1, P2 alerts."""
     if not os.path.exists(alerts_path):
         return []
-    
+
     alerts = []
     current_severity = "P2"
-    
+
     with open(alerts_path, "r", encoding="utf-8") as f:
         lines = f.readlines()
-        
+
     for line in lines:
         stripped = line.strip()
         if stripped.startswith("## P0"):
@@ -33,7 +33,7 @@ def parse_alerts(alerts_path: str):
             current_severity = "P2"
         elif stripped.startswith("## RESOLVED"):
             current_severity = "RESOLVED"
-        
+
         if stripped.startswith("### [ALERT-"):
             match = re.search(r"### \[(ALERT-\d+)\]\s*(.*)", stripped)
             if match:
@@ -47,6 +47,39 @@ def parse_alerts(alerts_path: str):
                         "status": "Open"
                     })
     return alerts
+
+
+def _next_alert_id(alerts_path: str) -> str:
+    """Return the next sequential alert ID based on existing alerts in the file."""
+    existing = parse_alerts(alerts_path)
+    if not existing:
+        return "ALERT-001"
+    numbers = [int(re.search(r"\d+", a["id"]).group()) for a in existing if re.search(r"\d+", a["id"])]
+    return f"ALERT-{(max(numbers) + 1):03d}"
+
+
+def _insert_alert(alerts_path: str, alert_data: dict, today_str: str) -> bool:
+    """Insert a formatted alert block under the matching severity section. Returns True on success."""
+    with open(alerts_path, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+    header_pattern = f"## {alert_data['severity']}"
+    for i, line in enumerate(lines):
+        if header_pattern in line:
+            alert_md = (
+                f"\n### [{alert_data['id']}] {alert_data['title']}\n"
+                f"**Severity**: {alert_data['severity']}\n"
+                f"**Status**:   Open\n"
+                f"**Owner**:    None\n"
+                f"**Discovered**: {today_str}\n"
+                f"**Impact**: [TBD]\n"
+                f"**Fix**: [TBD]\n"
+            )
+            lines.insert(i + 1, alert_md)
+            with open(alerts_path, "w", encoding="utf-8") as f:
+                f.writelines(lines)
+            return True
+    return False
+
 
 @app.command()
 def init():
@@ -276,7 +309,6 @@ def handoff():
         except Exception:
             pass
 
-    # 1. Task Type Selection
     valid_task_types = ["architecture", "code_review", "refactoring", "bugfix", "feature", "tests", "docs"]
     task_type = typer.prompt(
         "What type of work did you complete? (architecture/code_review/refactoring/bugfix/feature/tests/docs)",
@@ -284,7 +316,6 @@ def handoff():
     )
     if task_type not in valid_task_types:
         task_type = "feature"
-
     if models_config:
         recommended_model = models_config.get("recommendations", {}).get(task_type, models_config.get("default", "claude-sonnet-4-6"))
         reasoning_tasks = models_config.get("reasoning_tasks", [])
@@ -292,66 +323,40 @@ def handoff():
         if task_type in reasoning_tasks:
             console.print("[yellow]✓ This task benefits from extended thinking mode[/yellow]")
 
-    # 2. Accomplishments
     accomplishments = typer.prompt("What was accomplished in this block? (comma-separated, or empty to skip)", default="", show_default=False)
-
-    # 3. Changed files
     changed_files = typer.prompt("What files or components were recently changed? (comma-separated, or empty to skip)", default="", show_default=False)
 
-    # 4. Blocker/Alert
     add_alert = typer.confirm("Do you want to add a new blocker/alert?", default=False)
     new_alert_data = None
     if add_alert:
         alert_id = typer.prompt("Alert ID (e.g. ALERT-002)")
         alert_title = typer.prompt("Short description")
         alert_severity = typer.prompt("Severity (P0 / P1 / P2)", default="P2")
-        new_alert_data = {
-            "id": alert_id,
-            "title": alert_title,
-            "severity": alert_severity.upper()
-        }
+        new_alert_data = {"id": alert_id, "title": alert_title, "severity": alert_severity.upper()}
 
-    # 5. Design Decision
     add_decision = typer.confirm("Do you want to document a new design decision?", default=False)
     new_dec_data = None
     if add_decision:
         dec_id = typer.prompt("Decision ID (e.g. DEC-002)")
         dec_title = typer.prompt("Short title")
         dec_context = typer.prompt("Decision context / rationale")
-        new_dec_data = {
-            "id": dec_id,
-            "title": dec_title,
-            "context": dec_context
-        }
+        new_dec_data = {"id": dec_id, "title": dec_title, "context": dec_context}
 
-    # 6. Git Commit
     make_commit = typer.confirm("Do you want to stage all changes and create a git commit?", default=False)
     commit_data = None
     if make_commit:
         block_num = typer.prompt("Block number (e.g. 3)")
         commit_type = typer.prompt("Commit type (feat/fix/chore/docs)")
         commit_msg = typer.prompt("Commit message description")
-        commit_data = {
-            "block": block_num,
-            "type": commit_type,
-            "msg": commit_msg
-        }
+        commit_data = {"block": block_num, "type": commit_type, "msg": commit_msg}
 
-    # --- PROCESS UPDATES ---
     today_str = datetime.date.today().strftime("%Y-%m-%d")
-    
-    # Update CONTEXT.md
+
     context_path = os.path.join(".ai", "CONTEXT.md")
     if os.path.exists(context_path):
         with open(context_path, "r", encoding="utf-8") as f:
             content = f.read()
-            
-        content = re.sub(
-            r"## Current State \(updated: [^\)]+\)", 
-            f"## Current State (updated: {today_str})", 
-            content
-        )
-        
+        content = re.sub(r"## Current State \(updated: [^\)]+\)", f"## Current State (updated: {today_str})", content)
         if accomplishments:
             lines = content.splitlines()
             for i, line in enumerate(lines):
@@ -360,82 +365,112 @@ def handoff():
                     lines = lines[:i+1] + new_bullets + lines[i+1:]
                     break
             content = "\n".join(lines)
-            
         if changed_files:
             lines = content.splitlines()
             for i, line in enumerate(lines):
                 if "**Most recently changed:**" in line:
                     new_bullets = [f"- {cf.strip()}" for cf in changed_files.split(",") if cf.strip()]
-                    next_sec_idx = len(lines)
-                    for j in range(i+1, len(lines)):
-                        if lines[j].strip().startswith("---") or lines[j].strip().startswith("##"):
-                            next_sec_idx = j
-                            break
+                    next_sec_idx = next((j for j in range(i+1, len(lines)) if lines[j].strip().startswith("---") or lines[j].strip().startswith("##")), len(lines))
                     lines = lines[:i+1] + new_bullets + lines[next_sec_idx:]
                     break
             content = "\n".join(lines)
-            
         with open(context_path, "w", encoding="utf-8") as f:
             f.write(content)
         console.print("[green][OK] Updated .ai/CONTEXT.md[/green]")
 
-    # Update ALERTS.md
     if new_alert_data:
         alerts_path = os.path.join(".ai", "ALERTS.md")
-        if os.path.exists(alerts_path):
-            with open(alerts_path, "r", encoding="utf-8") as f:
-                lines = f.readlines()
-                
-            header_pattern = f"## {new_alert_data['severity']}"
-            inserted = False
-            for i, line in enumerate(lines):
-                if header_pattern in line:
-                    alert_md = (
-                        f"\n### [{new_alert_data['id']}] {new_alert_data['title']}\n"
-                        f"**Severity**: {new_alert_data['severity']}\n"
-                        f"**Status**:   Open\n"
-                        f"**Owner**:    None\n"
-                        f"**Discovered**: {today_str}\n"
-                        f"**Impact**: [TBD]\n"
-                        f"**Fix**: [TBD]\n"
-                    )
-                    lines.insert(i+1, alert_md)
-                    inserted = True
-                    break
-            if inserted:
-                with open(alerts_path, "w", encoding="utf-8") as f:
-                    f.writelines(lines)
-                console.print(f"[green][OK] Added alert {new_alert_data['id']} to .ai/ALERTS.md[/green]")
+        if os.path.exists(alerts_path) and _insert_alert(alerts_path, new_alert_data, today_str):
+            console.print(f"[green][OK] Added alert {new_alert_data['id']} to .ai/ALERTS.md[/green]")
 
-    # Update DECISIONS.md
     if new_dec_data:
         decisions_path = os.path.join(".ai", "DECISIONS.md")
         if os.path.exists(decisions_path):
             decision_md = (
                 f"\n## [{new_dec_data['id']}] {new_dec_data['title']}\n"
-                f"**Date**: {today_str}\n"
-                f"**Status**: Active\n"
+                f"**Date**: {today_str}\n**Status**: Active\n"
                 f"**Context**: {new_dec_data['context']}\n"
-                f"**Decision**: [TBD]\n"
-                f"**Rationale**: [TBD]\n"
-                f"**Consequences**: [TBD]\n"
-                f"**Revisit when**: [TBD]\n"
+                f"**Decision**: [TBD]\n**Rationale**: [TBD]\n**Consequences**: [TBD]\n**Revisit when**: [TBD]\n"
             )
             with open(decisions_path, "a", encoding="utf-8") as f:
                 f.write(decision_md)
             console.print(f"[green][OK] Recorded decision {new_dec_data['id']} in .ai/DECISIONS.md[/green]")
 
-    # Process Git commit
     if commit_data:
         try:
-            # Stage everything
             subprocess.run(["git", "add", "."], check=True)
-            # Commit
             commit_msg_full = f"[{commit_data['block']}] {commit_data['type']}: {commit_data['msg']}"
             subprocess.run(["git", "commit", "-m", commit_msg_full], check=True)
             console.print(f"[green][OK] Successfully created commit: {commit_msg_full}[/green]")
         except Exception as e:
             console.print(f"[red][ERROR] Git commit failed: {e}[/red]")
+
+@app.command("alert-add")
+def alert_add(
+    title: str = typer.Argument(..., help="Short description of the alert"),
+    severity: str = typer.Option("P2", "--severity", "-s", help="Severity level: P0, P1, or P2"),
+    alert_id: str = typer.Option(None, "--id", help="Alert ID (e.g. ALERT-003). Auto-generated if omitted."),
+):
+    """Add a new alert to .ai/ALERTS.md atomically."""
+    severity = severity.upper()
+    if severity not in ("P0", "P1", "P2"):
+        console.print(f"[red]Error: Invalid severity '{severity}'. Must be P0, P1, or P2.[/red]")
+        raise typer.Exit(1)
+
+    alerts_path = os.path.join(".ai", "ALERTS.md")
+    if not os.path.exists(alerts_path):
+        console.print("[red]Error: .ai/ALERTS.md not found. Run 'ai-orch init' first.[/red]")
+        raise typer.Exit(1)
+
+    resolved_id = alert_id or _next_alert_id(alerts_path)
+
+    with open(alerts_path, "r", encoding="utf-8") as f:
+        content = f.read()
+    if f"[{resolved_id}]" in content:
+        console.print(f"[red]Error: Alert ID '{resolved_id}' already exists in ALERTS.md.[/red]")
+        raise typer.Exit(1)
+
+    today_str = datetime.date.today().strftime("%Y-%m-%d")
+    alert_data = {"id": resolved_id, "title": title, "severity": severity}
+    if _insert_alert(alerts_path, alert_data, today_str):
+        console.print(f"[green][OK] Added [{resolved_id}] ({severity}): {title}[/green]")
+    else:
+        console.print(f"[red]Error: Could not find '## {severity}' section in ALERTS.md.[/red]")
+        raise typer.Exit(1)
+
+
+@app.command("alert-resolve")
+def alert_resolve(
+    alert_id: str = typer.Argument(..., help="Alert ID to resolve (e.g. ALERT-001)"),
+):
+    """Move an alert to the RESOLVED section of .ai/ALERTS.md."""
+    alerts_path = os.path.join(".ai", "ALERTS.md")
+    if not os.path.exists(alerts_path):
+        console.print("[red]Error: .ai/ALERTS.md not found. Run 'ai-orch init' first.[/red]")
+        raise typer.Exit(1)
+    with open(alerts_path, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+    start_idx = next(
+        (i for i, l in enumerate(lines) if re.search(rf"### \[{re.escape(alert_id)}\]", l)),
+        None
+    )
+    if start_idx is None:
+        console.print(f"[red]Error: Alert '{alert_id}' not found in ALERTS.md.[/red]")
+        raise typer.Exit(1)
+    end_idx = next(
+        (i for i in range(start_idx + 1, len(lines)) if lines[i].startswith("###") or lines[i].startswith("## ")),
+        len(lines)
+    )
+    block = [re.sub(r"\*\*Status\*\*:\s+Open", "**Status**:   Resolved", l) for l in lines[start_idx:end_idx]]
+    remaining = lines[:start_idx] + lines[end_idx:]
+    resolved_idx = next((i for i, l in enumerate(remaining) if l.startswith("## RESOLVED")), None)
+    if resolved_idx is None:
+        console.print("[red]Error: '## RESOLVED' section not found in ALERTS.md.[/red]")
+        raise typer.Exit(1)
+    with open(alerts_path, "w", encoding="utf-8") as f:
+        f.writelines(remaining[:resolved_idx + 1] + ["\n"] + block + remaining[resolved_idx + 1:])
+    console.print(f"[green][OK] Alert '{alert_id}' marked as Resolved and moved to RESOLVED section.[/green]")
+
 
 if __name__ == "__main__":
     app()

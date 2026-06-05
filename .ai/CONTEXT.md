@@ -12,8 +12,10 @@
 - `ai-orch check` — Pre-commit guard: blocks commit if code changed but `.ai/CONTEXT.md` was not updated
 - `ai-orch hook-install` — Installs git pre-commit hook
 - `ai-orch handoff` — Interactive wizard: updates `.ai/` docs and optionally commits
+- `ai-orch alert-add <title> --severity P0|P1|P2 [--id ALERT-XXX]` — Add alert atomically
+- `ai-orch alert-resolve <ALERT-ID>` — Mark resolved and move to RESOLVED section
 
-All 10 tests pass. No active alerts.
+All 21 tests pass. No active alerts.
 
 ---
 

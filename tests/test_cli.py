@@ -197,3 +197,70 @@ def test_hook_install_no_git_repo(tmp_path):
     result = runner.invoke(app, ["hook-install"])
     assert result.exit_code in (0, 1)
     assert result.exception is None or isinstance(result.exception, SystemExit)
+
+
+def test_alert_add_creates_alert(tmp_path):
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    result = runner.invoke(app, ["alert-add", "CORS failure in auth", "--severity", "P1"])
+    assert result.exit_code == 0
+    with open(".ai/ALERTS.md", "r", encoding="utf-8") as f:
+        content = f.read()
+    assert "CORS failure in auth" in content
+    assert "**Severity**: P1" in content
+
+
+def test_alert_add_auto_increments_id(tmp_path):
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    runner.invoke(app, ["alert-add", "First alert"])
+    runner.invoke(app, ["alert-add", "Second alert"])
+    with open(".ai/ALERTS.md", "r", encoding="utf-8") as f:
+        content = f.read()
+    assert "[ALERT-001]" in content
+    assert "[ALERT-002]" in content
+
+
+def test_alert_add_custom_id(tmp_path):
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    result = runner.invoke(app, ["alert-add", "Custom ID alert", "--id", "ALERT-007"])
+    assert result.exit_code == 0
+    with open(".ai/ALERTS.md", "r", encoding="utf-8") as f:
+        content = f.read()
+    assert "[ALERT-007]" in content
+
+
+def test_alert_add_invalid_severity(tmp_path):
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    result = runner.invoke(app, ["alert-add", "Bad severity", "--severity", "X9"])
+    assert result.exit_code == 1
+
+
+def test_alert_add_no_ai_folder(tmp_path):
+    os.chdir(tmp_path)
+    result = runner.invoke(app, ["alert-add", "No folder"])
+    assert result.exit_code == 1
+    assert "ai-orch init" in result.output
+
+
+def test_alert_resolve_moves_to_resolved(tmp_path):
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    runner.invoke(app, ["alert-add", "Bug to fix", "--severity", "P2"])
+    result = runner.invoke(app, ["alert-resolve", "ALERT-001"])
+    assert result.exit_code == 0
+    with open(".ai/ALERTS.md", "r", encoding="utf-8") as f:
+        content = f.read()
+    resolved_section = content.split("## RESOLVED")[1]
+    assert "Bug to fix" in resolved_section
+    assert "**Status**:   Resolved" in resolved_section
+
+
+def test_alert_resolve_missing_id(tmp_path):
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    result = runner.invoke(app, ["alert-resolve", "ALERT-999"])
+    assert result.exit_code == 1
+    assert "not found" in result.output
