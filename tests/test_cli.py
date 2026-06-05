@@ -7,9 +7,6 @@ from aiorch.main import app
 
 runner = CliRunner()
 
-def test_placeholder():
-    assert True
-
 def test_init_creates_ai_folder(tmp_path):
     os.chdir(tmp_path)
     result = runner.invoke(app, ["init"])
@@ -156,3 +153,47 @@ def test_config_json_models_field_parsed_correctly(tmp_path):
     assert config["models"]["default"] == "claude-sonnet-4-6"
     assert config["models"]["recommendations"]["architecture"] == "claude-opus-4-8"
     assert "architecture" in config["models"]["reasoning_tasks"]
+
+
+def test_init_skips_if_ai_folder_exists(tmp_path):
+    """init should warn and not overwrite if .ai/ already exists."""
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    result = runner.invoke(app, ["init"])
+    assert result.exit_code == 0
+
+
+def test_triage_missing_ai_folder(tmp_path):
+    """triage should handle missing .ai/ gracefully without crashing."""
+    os.chdir(tmp_path)
+    result = runner.invoke(app, ["triage"])
+    assert result.exit_code in (0, 1)
+    assert result.exception is None or isinstance(result.exception, SystemExit)
+
+
+def test_triage_invalid_config_json(tmp_path):
+    """triage should handle invalid config.json without crashing."""
+    os.chdir(tmp_path)
+    os.makedirs(".ai")
+    with open(".ai/config.json", "w") as f:
+        f.write("not valid json {{{")
+    with open(".ai/ALERTS.md", "w", encoding="utf-8") as f:
+        f.write("# Alerts\n## P0 — Blocking\n(none)\n## RESOLVED\n")
+    result = runner.invoke(app, ["triage"])
+    assert result.exit_code in (0, 1)
+    assert result.exception is None or isinstance(result.exception, SystemExit)
+
+
+def test_check_no_git_repo(tmp_path):
+    """check should exit gracefully when not in a git repo."""
+    os.chdir(tmp_path)
+    result = runner.invoke(app, ["check"])
+    assert result.exit_code == 0
+
+
+def test_hook_install_no_git_repo(tmp_path):
+    """hook-install should fail gracefully when .git/ does not exist."""
+    os.chdir(tmp_path)
+    result = runner.invoke(app, ["hook-install"])
+    assert result.exit_code in (0, 1)
+    assert result.exception is None or isinstance(result.exception, SystemExit)

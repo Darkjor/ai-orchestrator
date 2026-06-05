@@ -1,76 +1,59 @@
-# Project Context — Auto-maintained
+# Project Context — ai-orch (orquestador v1)
 
-> This file is updated by AI agents after significant work.
-> It is the fastest way to get up to speed (read before anything else).
-> Keep it under 80 lines. Remove stale info aggressively.
-
-## .ai/ Folder Index
-
-| File | Purpose |
-|------|---------|
-| ORCHESTRATOR.md | CEO arrival protocol — read this FIRST |
-| TRIAGE.md | Universal health check — run on every arrival |
-| ALERTS.md | Active fires P0/P1/P2 — check before any feature work |
-| DECISIONS.md | Why things are built the way they are |
-| CONTEXT.md | This file — live project state |
+**Last updated**: 2026-06-05
+**Updated by**: Claude Code
 
 ---
 
-## Current State (updated: 2026-06-05, Block 2)
+## What works right now
 
-**What works right now:**
-- Open Godot 4 → Import `client/` → F5 → "Jugar Demo (sin servidor)"
-- WASD movement, camera follows correctly
-- 5 monsters with real HP: Wolf / Troll / Orc / Dragon / Demon
-- Click or F to attack, Z/X/C/V for spells (Fireball/Heal/Lightning/Shield)
-- Death + 3s respawn to safe zone
-- Monster patrol AI (random walk every 2.5s)
-- XP + level-up system
-- Inventory popup (I key)
+- `ai-orch init` — Creates `.ai/` folder with 7 template files
+- `ai-orch triage` — Parses alerts, checks secrets, merge conflicts, runs tests
+- `ai-orch check` — Pre-commit guard: blocks commit if code changed but `.ai/CONTEXT.md` was not updated
+- `ai-orch hook-install` — Installs git pre-commit hook
+- `ai-orch handoff` — Interactive wizard: updates `.ai/` docs and optionally commits
 
-**What does NOT work yet:**
-- Server (Docker needs VT-x in BIOS — currently disabled on dev machine)
-- Real multiplayer (no server = no other players)
-- Real pixel art (73 placeholder PNGs — Gemini task TASK-001 pending)
-- Nakama auth/social not implemented
-
-**Most recently changed:**
-- `client/scripts/world/world_demo.gd` — spells, inventory, uses MonsterManager
-- `client/scripts/world/monster_manager.gd` — new: patrol AI + combat
-- `AI_TASKS.md` — task board (TASK-001 sprites open, TASK-003 Go tests open)
+All 10 tests pass. No active alerts.
 
 ---
 
-## Key Numbers
+## Most recently changed
+
+- `src/aiorch/main.py` — Fixed false-positive merge conflict detection (line 139, regex `^<{7}`)
+- `.ai/ALERTS.md` — Cleared template placeholder alerts, added resolved ALERT-001
+- `.ai/config.json` — Configured for ai-orch project (model recommendations, test command)
+- `.ai/ORCHESTRATOR.md` — Added Integrated Stack Protocol section (ai-orch + Ruflo + Superpowers)
+
+---
+
+## Key numbers
 
 | Metric | Value |
 |--------|-------|
-| Git commits | 2 (Block 1: 22585d0, Block 2: 24548f8) |
-| GDScript files | ~15 |
-| Go server files | ~20 |
-| Placeholder sprites | 73 PNGs |
-| DB tables | 12 |
-| Monsters in demo | 5 |
-| Spells in demo | 4 |
+| Python version | 3.10+ |
+| Commands | 5 (init, triage, check, hook-install, handoff) |
+| Tests | 10 (all passing) |
+| Dependencies | typer>=0.9.0, rich>=13.0.0 |
+| Entry point | `ai-orch` |
+| Template files | 7 (in src/aiorch/templates/) |
 
 ---
 
-## Next Block (Block 3) — Planned
+## Stack
 
-- Integrate real sprites into demo (replace Polygon2D with Sprite2D)
-- Go server: `go mod tidy` + first local run (needs Go installed or VT-x for Docker)
-- Basic multiplayer: see other players' positions
-- Persistent character save (local JSON until server is up)
+- Language: Python 3.11
+- CLI framework: Typer 0.26.7
+- Terminal UI: Rich 13.x
+- Agent orchestration: Ruflo (claude-flow) MCP
+- Skills system: Superpowers 5.1.0
+- Tests: pytest
 
 ---
 
-## How to Update This File
+## Next steps (Block 2)
 
-Update after:
-- Any Block commit
-- Any significant bug fix
-- Any new system added
-- Any blocker resolved or discovered
-
-Update the "Current State", "Most recently changed", and "Key Numbers" sections.
-Keep it concise. This file should never exceed 80 lines.
+- Add README.md (done in this session)
+- Complete pyproject.toml metadata for PyPI
+- Add error path tests (invalid inputs, missing `.ai/` folder)
+- Consider `ai-orch status` dashboard command
+- Ruflo memory integration: auto-store session context at handoff

@@ -7,3 +7,15 @@ venv/
 dist/
 build/
 *.egg-info/
+
+# Ruflo / claude-flow runtime
+.claude-flow/
+.mcp.json
+.swarm/
+ruvector.db
+
+# Claude Code project configuration (contains project-specific hooks)
+.claude/
+
+# Internal planning docs
+docs/superpowers/

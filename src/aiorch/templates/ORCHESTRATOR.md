@@ -79,3 +79,64 @@ STACK:   <project_stack>
 RUN IT:  <command_to_run_project>
 TASKS:   <where_tasks_are_tracked>
 ```
+
+---
+
+## Cómo elegir tu herramienta
+
+Lee `.ai/WHEELS.md` primero. Si lo que vas a hacer aparece como FAIL o ALUC, busca alternativa.
+
+| Tarea | Herramienta a invocar |
+|-------|-----------------------|
+| Feature nueva | `superpowers:brainstorming` → `writing-plans` → `subagent-driven-development` |
+| Bug / comportamiento inesperado | `superpowers:systematic-debugging` |
+| Múltiples tareas paralelas | `superpowers:dispatching-parallel-agents` |
+| Tarea compleja con muchos subtareas | `sparc:orchestrator` o `swarm:swarm-init` (ruflo) |
+| Necesitas un skill nuevo | `skill-creator:skill-creator` |
+| Review de código | `superpowers:requesting-code-review` |
+| Cualquier implementación | `superpowers:test-driven-development` (siempre) |
+| Múltiples agentes coordinados | `swarm:swarm-init` + `hive-mind:hive-mind-init` |
+
+**Número de agentes:** No hay número fijo. Usa los que la tarea requiera.
+
+**Regla de oro:** WHEELS.md antes que código.
+
+### Flujo de sesión completo
+
+```
+LLEGADA
+  1. memory_search "<project> context" (ruflo) O leer .ai/CONTEXT.md + .ai/ALERTS.md
+  2. <run_command> triage
+  3. Leer .ai/WHEELS.md
+
+TRABAJO
+  4. Identificar tarea → tabla arriba → invocar herramienta correcta
+  5. Verificar contra WHEELS.md antes de implementar
+  6. Tests deben estar verdes antes de marcar done
+
+SALIDA
+  7. ai-orch handoff (actualiza .ai/ files)
+  8. memory_store "<project> context" con resumen
+  9. Si algo falló: añadir FAIL-XXX o ALUC-XXX a .ai/WHEELS.md
+```
+
+---
+
+## Arriving From Another AI
+
+### Claude Code (native)
+No setup needed — follow the arrival protocol above.
+
+### Gemini CLI
+```sh
+gemini "$(cat .ai/ORCHESTRATOR.md .ai/CONTEXT.md .ai/ALERTS.md .ai/WHEELS.md)"
+```
+
+### GPT-4 / ChatGPT
+Paste `.ai/ORCHESTRATOR.md` + `.ai/CONTEXT.md` + `.ai/WHEELS.md` as your first message, then follow the arrival protocol.
+
+### Cursor / GitHub Copilot
+Add to `.cursorrules`: `At start of every session, read .ai/ORCHESTRATOR.md and follow the arrival protocol.`
+
+### Any other AI
+Feed `.ai/ORCHESTRATOR.md` + `.ai/CONTEXT.md` + `.ai/WHEELS.md` as system context before any task.

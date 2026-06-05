@@ -17,7 +17,7 @@
 ```
 P0 alert exists AND affects your capability?
   → Go to ALERTS.md. Fix the P0 or document why you can't.
-  → Do NOT touch AI_TASKS.md until P0 is handled.
+  → Do NOT start new work until P0 is handled.
 
 Only P1/P2 alerts?
   → Note them. Proceed to step 3.
@@ -26,7 +26,34 @@ No alerts?
   → Proceed to step 3.
 ```
 
-If you are unsure about severity → run `.ai/TRIAGE.md` health checks.
+If you are unsure about severity → run `python -m aiorch.main triage`.
+
+### Integrated Stack: ai-orch + Ruflo + Superpowers
+
+This project runs three systems together. At session start, in order:
+
+1. **Ruflo memory** — Recover context from last session:
+   Use `memory_search` MCP tool to query "orquestador session context"
+   (tool: `mcp__claude-flow__memory_search`)
+
+2. **ai-orch triage** — Check project health:
+
+   ```sh
+   python -m aiorch.main triage
+   ```
+
+   Address any P0 alerts before writing code.
+
+3. **Superpowers** — Before any creative/implementation work:
+   Invoke `superpowers:brainstorming` skill for features,
+   `superpowers:systematic-debugging` for bugs,
+   `superpowers:subagent-driven-development` for multi-task plans.
+
+At session END, in order:
+
+1. Run `python -m aiorch.main handoff` (updates .ai/ docs + commits)
+2. Store session summary in ruflo memory:
+   Use `memory_store` MCP tool with namespace "orquestador" and key "last_session"
 
 ### Minute 3 — Identify yourself and claim work
 
@@ -40,8 +67,6 @@ Before ending your session, update:
 |------|---------------|
 | `.ai/CONTEXT.md` | Current State + Most Recently Changed |
 | `.ai/ALERTS.md` | New fires discovered, resolved alerts |
-| `AI_TASKS.md` | Task status (claimed → in-progress → done) |
-| `CHANGELOG.md` | What you shipped under [Unreleased] |
 | `.ai/DECISIONS.md` | Any architectural decision you made |
 
 **If you run out of tokens mid-task**: update CONTEXT.md with exactly where you stopped.
@@ -49,46 +74,47 @@ The next AI will pick up from there.
 
 ---
 
-## Task Routing by AI Type
+## Cómo elegir tu herramienta
 
-### You are a CODE AI
-*(Claude Code, Gemini CLI, Cursor, Copilot, GPT-4o with code tools)*
+Lee `.ai/WHEELS.md` primero. Si lo que vas a hacer aparece como FAIL o ALUC, busca alternativa.
 
-1. Read `docs/HANDOFF.md` — architecture and stack (5 min)
-2. Read `AI_TASKS.md` — find an Open task tagged `[code]`
-3. Claim it: write your AI name + date in "Assigned to"
-4. Follow the output paths in the task exactly
-5. When done: update all departure files (see above)
-6. Commit: `git commit -m "feat/fix/chore(scope): description [Block N]"`
+Luego identifica el tipo de tarea y usa la herramienta correcta:
 
-**Hard rules:**
-- Keep files ≤ 500 lines — split into modules if needed
-- Never commit .env, secrets, or credentials
-- Run existing tests before marking a task Done
-- If blocked: document in ALERTS.md and AI_TASKS.md, don't just stop silently
+| Tarea | Herramienta a invocar |
+|-------|-----------------------|
+| Feature nueva | `superpowers:brainstorming` → `superpowers:writing-plans` → `superpowers:subagent-driven-development` |
+| Bug / comportamiento inesperado | `superpowers:systematic-debugging` |
+| Múltiples tareas paralelas e independientes | `superpowers:dispatching-parallel-agents` |
+| Tarea compleja con muchos subtareas | `sparc:orchestrator` o `swarm:swarm-init` (ruflo) |
+| Necesitas un skill que no existe | `skill-creator:skill-creator` |
+| Review de código | `superpowers:requesting-code-review` |
+| Cualquier implementación de código | `superpowers:test-driven-development` (siempre, sin excepción) |
+| Coordinación de múltiples agentes | `swarm:swarm-init` + `hive-mind:hive-mind-init` (ruflo) |
+| Verificar que algo realmente funciona | `verify` skill |
 
-### You are an IMAGE AI
-*(Gemini Imagen, DALL-E, Midjourney, Stable Diffusion, Firefly)*
+**Número de agentes:** No hay número fijo. Usa los que la tarea requiera — puede ser 2 para un bugfix, 15 para una feature grande.
 
-1. Read `docs/ASSET_GUIDE.md` — exact dimensions, format, style
-2. Read `AI_TASKS.md` — find an Open task tagged `[image]`
-3. Claim it
-4. Generate → overwrite files in place. NEVER rename, move, or delete files.
-5. When done: update departure files
+**Regla de oro:** WHEELS.md antes que código. Siempre.
 
-**Hard rules:**
-- PNG only with alpha channel
-- Dimensions must match ASSET_GUIDE.md exactly
-- Never touch .gd, .tscn, .go, .sql, .yaml, .json files
-- Do not create new files unless the task explicitly lists them
+### Flujo de sesión completo
 
-### You are a TEXT / REASONING AI
-*(GPT-4 chat, Gemini Pro, Claude chat without tools)*
+```
+LLEGADA
+  1. [auto] memory_search "orquestador context" (ruflo)
+     O leer .ai/CONTEXT.md + .ai/ALERTS.md si no tienes ruflo
+  2. python -m aiorch.main triage
+  3. Leer .ai/WHEELS.md — ¿qué NO hacer?
 
-1. Read `docs/HANDOFF.md` + `docs/PROGRESS.md`
-2. Read `AI_TASKS.md` — find an Open task tagged `[analysis]` or `[docs]`
-3. Claim it, complete it
-4. Update departure files
+TRABAJO
+  4. Identificar tipo de tarea → tabla arriba → invocar herramienta
+  5. Antes de implementar: verificar contra WHEELS.md
+  6. pytest tests/ -v debe estar verde antes de marcar done
+
+SALIDA
+  7. python -m aiorch.main handoff (actualiza .ai/ files)
+  8. [auto] memory_store "orquestador context" con resumen de la sesión
+  9. Si algo falló: añadir FAIL-XXX o ALUC-XXX a .ai/WHEELS.md
+```
 
 ---
 
@@ -97,16 +123,16 @@ The next AI will pick up from there.
 > **[PROJECT-SPECIFIC SECTION — update this when copying .ai/ to a new project]**
 
 ```
-PROJECT: Nexus RPG
-TYPE:    MMORPG — Godot 4 client + Go authoritative server
-STATUS:  Block 2 complete — offline demo fully playable
-STACK:   GDScript / Go 1.22 / PostgreSQL 16 / Redis 7 / Nakama 3.22
-RUN IT:  Godot 4 → Import client/ → F5 → "Jugar Demo (sin servidor)"
-BLOCKER: ALERT-001 — Docker needs VT-x in BIOS (server can't run yet)
-TASKS:   AI_TASKS.md
-DOCS:    docs/HANDOFF.md (arch), docs/PROGRESS.md (sprint), .ai/DECISIONS.md (why)
-BLOCKS:  Block 1 ✓ (camera fix, combat) | Block 2 ✓ (patrol, spells, inventory)
-         Block 3 → sprite integration, server setup, multiplayer
+PROJECT: ai-orch (orquestador v1)
+TYPE:    Python CLI — AI session orchestration framework
+STATUS:  Alpha — 5 commands working, full stack integrated
+STACK:   Python/Typer + Node/claude-flow MCP + Superpowers skills 5.1.0
+RUN IT:  python -m aiorch.main triage
+TESTS:   pytest tests/ -v (all passing)
+TASKS:   .ai/CONTEXT.md + .ai/ALERTS.md
+DOCS:    src/aiorch/main.py (442 lines), src/aiorch/templates/
+BLOCKS:  Block 1 ✓ (init, triage, check, hook-install, handoff)
+         Block 2 → ruflo integration, swarm agents, memory persistence
 ```
 
 ---
@@ -133,16 +159,44 @@ Everything else (TRIAGE.md, protocols, routing rules, departure checklist) is **
 
 ---
 
-## Compatibility
+## Arriving From Another AI
 
-| AI Tool | First command |
-|---------|--------------|
-| Claude Code | Reads ORCHESTRATOR.md via Agent tool or context |
-| Gemini CLI | `gemini "Read .ai/ORCHESTRATOR.md and follow the arrival protocol"` |
-| GPT-4 / ChatGPT | Paste ORCHESTRATOR.md + CONTEXT.md as first message |
-| Cursor | Add to `.cursorrules`: `Start every session by reading .ai/ORCHESTRATOR.md` |
-| GitHub Copilot | Add to workspace instructions |
-| Any other AI | Provide .ai/ORCHESTRATOR.md as system context |
+### Claude Code (native)
+
+No setup needed — follow the arrival protocol above.
+
+### Gemini CLI
+
+Feed context directly:
+```sh
+gemini "$(cat .ai/ORCHESTRATOR.md .ai/CONTEXT.md .ai/ALERTS.md)"
+```
+Then follow the arrival protocol as instructed.
+
+### GPT-4 / ChatGPT
+
+Paste this as your first message:
+```
+[START PROJECT CONTEXT]
+[paste .ai/ORCHESTRATOR.md contents]
+---
+[paste .ai/CONTEXT.md contents]
+---
+[paste .ai/ALERTS.md contents]
+[END PROJECT CONTEXT]
+Follow the ARRIVAL PROTOCOL above. Adopt the appropriate Hat for your task.
+```
+
+### Cursor / GitHub Copilot
+
+Add to `.cursorrules` or workspace instructions:
+```
+At the start of every session, read .ai/ORCHESTRATOR.md and follow the arrival protocol. Adopt the appropriate Hat.
+```
+
+### Any other AI
+
+Feed `.ai/ORCHESTRATOR.md` + `.ai/CONTEXT.md` as system context before any task.
 
 ---
 

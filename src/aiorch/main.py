@@ -136,7 +136,7 @@ def triage():
             try:
                 with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                     content = f.read()
-                    if "<<<<<<<" in content and "=======" in content:
+                    if re.search(r'^<{7}', content, re.MULTILINE) and re.search(r'^={7}$', content, re.MULTILINE):
                         console.print(f"[red][ERROR] Merge conflict found in {file_path}[/red]")
                         conflict_found = True
             except Exception:

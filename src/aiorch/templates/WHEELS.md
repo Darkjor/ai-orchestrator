@@ -1,24 +1,53 @@
-# Wheels & Patterns — What NOT to Reinvent
+# Wheels — <project_name>
 
-> Before writing any utility, installing a library, or designing a subsystem:
-> Check this list. If a solution exists, USE IT.
-> If you think we should change a solution, add a new entry to DECISIONS.md first.
+> Lee este archivo ANTES de implementar cualquier cosa.
+> Si lo que vas a hacer aparece como FAIL o ALUC — busca alternativa primero.
 
 ---
 
-## 1. Core Stack & Libraries in Use
-List of established libraries to prevent agents from implementing custom alternatives or installing redundant packages.
+## 1. Stack Activo (no reinventar)
 
-- **[Category/Layer]**: [Library/Framework Name]. Do NOT implement custom alternatives.
+| Componente | Qué es | Dónde vive | Cómo usarlo |
+|------------|--------|------------|-------------|
+| (añadir componentes del proyecto aquí) | | | |
 
-## 2. Failed Experiments (What NOT to do)
-Critical section to reduce hallucination. Explains what was tried, why it failed, and why we don't use it.
+---
 
-### [WHEEL-001] [Short title of failed experiment]
-- **What was tried**: [What did we build/try to use]
-- **Why it failed**: [Why didn't it work out]
-- **What we do instead**: [The working alternative in the codebase]
-- **Rule**: [Concrete instruction to future agents]
+## 2. QA Failures (lo que se intentó y no funcionó)
 
-## 3. Standard Utility Patterns
-- **[Utility Name]**: [Pattern or file location to use]. Do NOT write custom code for this.
+*(vacío al inicio — añadir cuando algo falle en QA o runtime)*
+
+### Formato:
+
+```
+### [FAIL-XXX] Título corto
+
+**Intentado**: descripción exacta de lo que se hizo
+**Falló porque**: causa raíz, no síntoma
+**Contexto**: tarea/fecha en que ocurrió
+**Alternativa adoptada**: qué funcionó en su lugar
+```
+
+---
+
+## 3. Alucinaciones Documentadas (patrones incorrectos de agentes)
+
+*(vacío al inicio — añadir cuando un agente repita el mismo error)*
+
+### Formato:
+
+```
+### [ALUC-XXX] Título corto
+
+**El agente insiste en**: comportamiento incorrecto que repite
+**Por qué está mal aquí**: razón específica de este proyecto
+**Qué hacer en cambio**: instrucción directa
+```
+
+---
+
+## Cómo actualizar este archivo
+
+**Cuando algo falla:** añadir `[FAIL-XXX]` con causa raíz + alternativa adoptada.
+
+**Cuando un agente repite un error:** añadir `[ALUC-XXX]` con instrucción directa.
