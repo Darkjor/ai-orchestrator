@@ -1,0 +1,14 @@
+{
+  "project_name": "My Agnostic Project",
+  "project_type": "CLI / Library / App",
+  "project_status": "Alpha",
+  "project_stack": "Python / Node.js",
+  "run_command": "echo 'Run command not configured'",
+  "test_command": "pytest",
+  "ignored_patterns": [
+    ".env",
+    "*.pem",
+    "venv/"
+  ],
+  "enforce_changelog": false
+}
