@@ -4,6 +4,7 @@ import subprocess
 import datetime
 from typer.testing import CliRunner
 from aiorch.main import app
+from aiorch._helpers import parse_lint_rules
 
 runner = CliRunner()
 
@@ -197,3 +198,84 @@ def test_hook_install_no_git_repo(tmp_path):
     result = runner.invoke(app, ["hook-install"])
     assert result.exit_code in (0, 1)
     assert result.exception is None or isinstance(result.exception, SystemExit)
+
+
+WHEELS_WITH_RULES = """\
+# Wheels
+
+## 4. Lint Rules (enforced at pre-commit)
+
+### [LINT-001] No console.log
+**Pattern**: `console\\.log\\(`
+**Files**: *.js, *.ts
+**Message**: Remove console.log before committing.
+
+### [LINT-002] No TODO comments
+**Pattern**: `#\\s*TODO`
+**Files**: *.py
+**Message**: Resolve TODOs before committing.
+"""
+
+def test_parse_lint_rules_returns_rules(tmp_path):
+    wheels_path = tmp_path / "WHEELS.md"
+    wheels_path.write_text(WHEELS_WITH_RULES, encoding="utf-8")
+    rules = parse_lint_rules(str(wheels_path))
+    assert len(rules) == 2
+    assert rules[0]["message"] == "Remove console.log before committing."
+    assert "*.js" in rules[0]["files"]
+    assert rules[1]["message"] == "Resolve TODOs before committing."
+
+
+def test_parse_lint_rules_no_section(tmp_path):
+    wheels_path = tmp_path / "WHEELS.md"
+    wheels_path.write_text("# Wheels\n## 1. Stack\n*(none)*\n", encoding="utf-8")
+    rules = parse_lint_rules(str(wheels_path))
+    assert rules == []
+
+
+def test_parse_lint_rules_missing_file(tmp_path):
+    rules = parse_lint_rules(str(tmp_path / "nonexistent.md"))
+    assert rules == []
+
+
+def test_check_blocks_on_lint_violation(tmp_path):
+    os.chdir(tmp_path)
+    subprocess.run(["git", "init"], check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test"], check=True)
+    subprocess.run(["git", "config", "user.email", "t@t.com"], check=True)
+    runner.invoke(app, ["init"])
+
+    with open(".ai/WHEELS.md", "w", encoding="utf-8") as f:
+        f.write(WHEELS_WITH_RULES)
+
+    with open("script.py", "w") as f:
+        f.write("x = 1\n# TODO: fix this\ny = 2\n")
+
+    with open("init.txt", "w") as f:
+        f.write("init")
+    subprocess.run(["git", "add", "init.txt"], check=True)
+    subprocess.run(["git", "commit", "-m", "init"], check=True)
+
+    subprocess.run(["git", "add", "script.py", ".ai/WHEELS.md", ".ai/CONTEXT.md"], check=True)
+    result = runner.invoke(app, ["check"])
+    assert result.exit_code == 1
+    assert "WHEELS.md Lint" in result.output
+
+
+def test_check_passes_with_no_lint_rules(tmp_path):
+    os.chdir(tmp_path)
+    subprocess.run(["git", "init"], check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test"], check=True)
+    subprocess.run(["git", "config", "user.email", "t@t.com"], check=True)
+    runner.invoke(app, ["init"])
+
+    with open("init.txt", "w") as f:
+        f.write("init")
+    subprocess.run(["git", "add", "init.txt"], check=True)
+    subprocess.run(["git", "commit", "-m", "init"], check=True)
+
+    with open("script.py", "w") as f:
+        f.write("x = 1\n")
+    subprocess.run(["git", "add", "script.py", ".ai/CONTEXT.md"], check=True)
+    result = runner.invoke(app, ["check"])
+    assert result.exit_code == 0

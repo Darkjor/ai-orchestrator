@@ -13,7 +13,7 @@
 - `ai-orch hook-install` — Installs git pre-commit hook
 - `ai-orch handoff` — Interactive wizard: updates `.ai/` docs and optionally commits
 
-All 10 tests pass. No active alerts.
+All 19 tests pass. No active alerts.
 
 ---
 

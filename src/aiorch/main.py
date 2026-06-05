@@ -8,45 +8,10 @@ import typer
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
+from aiorch._helpers import parse_alerts, parse_lint_rules, check_staged_lint
 
 app = typer.Typer(help="Global AI Orchestrator CLI")
 console = Console()
-
-def parse_alerts(alerts_path: str):
-    """Parse alerts file and return open P0, P1, P2 alerts."""
-    if not os.path.exists(alerts_path):
-        return []
-    
-    alerts = []
-    current_severity = "P2"
-    
-    with open(alerts_path, "r", encoding="utf-8") as f:
-        lines = f.readlines()
-        
-    for line in lines:
-        stripped = line.strip()
-        if stripped.startswith("## P0"):
-            current_severity = "P0"
-        elif stripped.startswith("## P1"):
-            current_severity = "P1"
-        elif stripped.startswith("## P2"):
-            current_severity = "P2"
-        elif stripped.startswith("## RESOLVED"):
-            current_severity = "RESOLVED"
-        
-        if stripped.startswith("### [ALERT-"):
-            match = re.search(r"### \[(ALERT-\d+)\]\s*(.*)", stripped)
-            if match:
-                alert_id = match.group(1)
-                title = match.group(2)
-                if current_severity != "RESOLVED":
-                    alerts.append({
-                        "id": alert_id,
-                        "title": title,
-                        "severity": current_severity,
-                        "status": "Open"
-                    })
-    return alerts
 
 @app.command()
 def init():
@@ -222,7 +187,18 @@ def check():
             expand=False
         ))
         raise typer.Exit(1)
-        
+
+    wheels_path = os.path.join(".ai", "WHEELS.md")
+    rules = parse_lint_rules(wheels_path)
+    if rules:
+        violations = check_staged_lint(staged_files, rules)
+        if violations:
+            console.print(Panel("[red]WHEELS.md Lint Violations — commit blocked[/red]", expand=False))
+            for v in violations:
+                console.print(f"[red]✗[/red] [bold]{v['file']}:{v['line']}[/bold] — {v['message']}")
+                console.print(f"  [dim]{v['code']}[/dim]")
+            raise typer.Exit(1)
+
     console.print("[green][OK] AI orchestrator context update verified.[/green]")
     raise typer.Exit(0)
 

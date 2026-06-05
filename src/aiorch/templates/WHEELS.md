@@ -46,8 +46,28 @@
 
 ---
 
+## 4. Lint Rules (enforced at pre-commit)
+
+Rules here are checked automatically by `ai-orch check` against staged files.
+Add a rule when a pattern from ALUC/FAIL needs to be enforced in code, not just documented.
+
+### Rule format
+
+```
+### [LINT-001] Short description
+**Pattern**: `regex_pattern`
+**Files**: *.ext, *.ext2
+**Message**: Why this is blocked and what to do instead.
+```
+
+No rules yet — add one when a WHEELS pattern needs hard enforcement.
+
+---
+
 ## Cómo actualizar este archivo
 
 **Cuando algo falla:** añadir `[FAIL-XXX]` con causa raíz + alternativa adoptada.
 
 **Cuando un agente repite un error:** añadir `[ALUC-XXX]` con instrucción directa.
+
+**Cuando un patrón de ALUC necesita enforcement duro:** añadir `[LINT-XXX]` en la sección 4.
