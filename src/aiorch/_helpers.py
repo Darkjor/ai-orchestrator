@@ -1,8 +1,15 @@
 import ast as _ast
+import json
 import os
 import re
 import fnmatch
 import subprocess
+
+# Module-level compiled regex constants — avoids per-call re.compile() overhead.
+_RE_ALERT_HEADER = re.compile(r"### \[(ALERT-\d+)\]\s*(.*)")
+_RE_ALERT_ID = re.compile(r"### \[(ALERT-(\d+))\]")
+_RE_PENDING_HEADER = re.compile(r"### \[([A-Z]+-\d+)\]\s*(.*)")
+_RE_HEADING = re.compile(r"^#{1,4}\s")
 
 
 def parse_alerts(alerts_path: str) -> list:
@@ -24,7 +31,7 @@ def parse_alerts(alerts_path: str) -> list:
         elif s.startswith("## RESOLVED"):
             current_severity = "RESOLVED"
         if s.startswith("### [ALERT-"):
-            m = re.search(r"### \[(ALERT-\d+)\]\s*(.*)", s)
+            m = _RE_ALERT_HEADER.search(s)
             if m and current_severity != "RESOLVED":
                 alerts.append({"id": m.group(1), "title": m.group(2), "severity": current_severity, "status": "Open"})
     return alerts
@@ -37,7 +44,7 @@ def _all_alert_ids(alerts_path: str) -> list:
     ids = []
     with open(alerts_path, "r", encoding="utf-8") as f:
         for line in f:
-            m = re.search(r"### \[(ALERT-(\d+))\]", line)
+            m = _RE_ALERT_ID.search(line)
             if m:
                 ids.append(int(m.group(2)))
     return ids
@@ -87,7 +94,12 @@ def parse_lint_rules(wheels_path: str) -> list:
         message = re.search(r"\*\*Message\*\*: (.+)", body)
         if pattern and message:
             globs = [g.strip() for g in files_field.group(1).split(",")] if files_field else ["*"]
-            rules.append({"pattern": pattern.group(1), "files": globs, "message": message.group(1).strip()})
+            rules.append({
+                "pattern": pattern.group(1),
+                "compiled": re.compile(pattern.group(1)),
+                "files": globs,
+                "message": message.group(1).strip(),
+            })
     return rules
 
 
@@ -107,7 +119,7 @@ def update_section(filepath: str, section: str, value: str) -> bool:
         return False
     end_idx = len(lines)
     for j in range(heading_idx + 1, len(lines)):
-        if re.match(r"^#{1,4}\s", lines[j]) or lines[j].strip() == "---":
+        if _RE_HEADING.match(lines[j]) or lines[j].strip() == "---":
             end_idx = j
             break
     new_value = value.replace("\\n", "\n")
@@ -175,7 +187,7 @@ def parse_pending(pending_path: str) -> list:
             current_type = "Other"
         elif s.startswith("## DONE"):
             current_type = "DONE"
-        m = re.search(r"### \[([A-Z]+-\d+)\]\s*(.*)", s)
+        m = _RE_PENDING_HEADER.search(s)
         if m and current_type != "DONE":
             actions.append({"id": m.group(1), "title": m.group(2), "type": current_type})
     return actions
@@ -220,7 +232,7 @@ def _resolve_action(pending_path: str, action_id: str) -> bool:
     start = next((i for i, l in enumerate(lines) if re.search(rf"### \[{re.escape(action_id)}\]", l)), -1)
     if start == -1:
         return False
-    end = next((j for j in range(start + 1, len(lines)) if re.match(r"#{2,3} ", lines[j])), len(lines))
+    end = next((j for j in range(start + 1, len(lines)) if _RE_HEADING.match(lines[j])), len(lines))
     block = [l.replace("**Status**: Pending", "**Status**: Done") for l in lines[start:end]]
     remaining = lines[:start] + lines[end:]
     done = next((i for i, l in enumerate(remaining) if l.strip() == "## DONE"), -1)
@@ -233,8 +245,119 @@ def _resolve_action(pending_path: str, action_id: str) -> bool:
     return True
 
 
+def load_config(config_path: str) -> dict:
+    """Load and return config.json as a dict. Returns {} on missing or corrupt file."""
+    if not os.path.exists(config_path):
+        return {}
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def update_context(context_path: str, today_str: str, accomplishments: str, changed_files: str) -> bool:
+    """Update CONTEXT.md date stamp and inject accomplishment / changed-file bullets.
+
+    Returns True if the file was written, False if it does not exist.
+    """
+    if not os.path.exists(context_path):
+        return False
+    with open(context_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    content = re.sub(
+        r"## Current State \(updated: [^\)]+\)",
+        f"## Current State (updated: {today_str})",
+        content,
+    )
+
+    if accomplishments.strip():
+        lines = content.splitlines()
+        for i, line in enumerate(lines):
+            if "**What works right now:**" in line:
+                new_bullets = [f"- {a.strip()}" for a in accomplishments.split(",") if a.strip()]
+                lines = lines[: i + 1] + new_bullets + lines[i + 1:]
+                break
+        content = "\n".join(lines)
+
+    if changed_files.strip():
+        lines = content.splitlines()
+        for i, line in enumerate(lines):
+            if "**Most recently changed:**" in line:
+                new_bullets = [f"- {cf.strip()}" for cf in changed_files.split(",") if cf.strip()]
+                next_sec_idx = len(lines)
+                for j in range(i + 1, len(lines)):
+                    if lines[j].strip().startswith("---") or lines[j].strip().startswith("##"):
+                        next_sec_idx = j
+                        break
+                lines = lines[: i + 1] + new_bullets + lines[next_sec_idx:]
+                break
+        content = "\n".join(lines)
+
+    with open(context_path, "w", encoding="utf-8") as f:
+        f.write(content)
+    return True
+
+
+def append_decision(decisions_path: str, dec_data: dict, today_str: str) -> None:
+    """Append a new decision block to DECISIONS.md."""
+    if not os.path.exists(decisions_path):
+        return
+    block = (
+        f"\n## [{dec_data['id']}] {dec_data['title']}\n"
+        f"**Date**: {today_str}\n"
+        f"**Status**: Active\n"
+        f"**Context**: {dec_data['context']}\n"
+        f"**Decision**: [TBD]\n"
+        f"**Rationale**: [TBD]\n"
+        f"**Consequences**: [TBD]\n"
+        f"**Revisit when**: [TBD]\n"
+    )
+    with open(decisions_path, "a", encoding="utf-8") as f:
+        f.write(block)
+
+
+def run_git_commit(block_num: str, commit_type: str, msg: str) -> tuple[bool, str]:
+    """Stage all changes and create a git commit. Returns (success, error_message)."""
+    try:
+        subprocess.run(["git", "add", "."], check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        return False, f"git add failed: {e.stderr.strip()}"
+    commit_msg = f"[{block_num}] {commit_type}: {msg}"
+    try:
+        subprocess.run(["git", "commit", "-m", commit_msg], check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        return False, f"git commit failed: {e.stderr.strip()}"
+    return True, commit_msg
+
+
+def _has_merge_conflicts() -> bool:
+    """Return True if git grep finds merge conflict markers in the working tree.
+
+    Uses ``git grep`` (O(diff)) instead of a full os.walk scan (O(repo-bytes)).
+    Falls back to False when not in a git repo or git is unavailable; the
+    caller can then use its own file-scan as a fallback.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "grep", "-l", "^<<<<<<<"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        return bool(result.stdout.strip())
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return False
+
+
 def check_staged_lint(staged_files: list, rules: list) -> list:
-    """Check staged file content against lint rules. Returns list of violation dicts."""
+    """Check staged file content against lint rules. Returns list of violation dicts.
+
+    Rules are expected to carry a pre-compiled ``compiled`` key (added by
+    ``parse_lint_rules``).  If absent, the pattern string is compiled on first
+    use and cached back into the rule dict so subsequent calls remain fast.
+    """
     violations = []
     for filepath in staged_files:
         matching = [r for r in rules if any(fnmatch.fnmatch(os.path.basename(filepath), g) for g in r["files"])]
@@ -242,12 +365,27 @@ def check_staged_lint(staged_files: list, rules: list) -> list:
             continue
         try:
             git_path = filepath.replace(os.sep, "/")
-            result = subprocess.run(["git", "show", f":{git_path}"], capture_output=True, text=True, check=True)
+            result = subprocess.run(
+                ["git", "show", f":{git_path}"],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
             content = result.stdout
         except Exception:
             continue
         for rule in matching:
+            # Use pre-compiled pattern; compile lazily if absent (backward compat).
+            compiled = rule.get("compiled")
+            if compiled is None:
+                compiled = re.compile(rule["pattern"])
+                rule["compiled"] = compiled
             for lineno, line in enumerate(content.splitlines(), 1):
-                if re.search(rule["pattern"], line):
-                    violations.append({"file": filepath, "line": lineno, "message": rule["message"], "code": line.strip()})
+                if compiled.search(line):
+                    violations.append({
+                        "file": filepath,
+                        "line": lineno,
+                        "message": rule["message"],
+                        "code": line.strip(),
+                    })
     return violations

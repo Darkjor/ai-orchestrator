@@ -409,3 +409,360 @@ def test_handoff_snapshot_flag(tmp_path):
         content = f.read()
     assert "Codebase Snapshot" in content
     assert "run" in content
+
+
+# ---------------------------------------------------------------------------
+# Edge case tests
+# ---------------------------------------------------------------------------
+
+def test_triage_empty_alerts_file(tmp_path):
+    """triage should handle an empty ALERTS.md without crashing."""
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    with open(".ai/ALERTS.md", "w", encoding="utf-8") as f:
+        f.write("")
+    result = runner.invoke(app, ["triage"])
+    assert result.exit_code == 0
+    assert result.exception is None
+
+
+def test_triage_large_alerts_file(tmp_path):
+    """triage regex should complete in reasonable time on a large ALERTS.md."""
+    import time
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    # Build 500-alert ALERTS.md (~10k lines)
+    lines = ["# Active Alerts\n## P0 — Blocking\n"]
+    for i in range(1, 501):
+        lines.append(
+            f"### [ALERT-{i:03d}] Alert number {i}\n"
+            f"**Severity**: P0\n**Status**:   Open\n\n"
+        )
+    lines.append("## RESOLVED\n")
+    with open(".ai/ALERTS.md", "w", encoding="utf-8") as f:
+        f.writelines(lines)
+    start = time.monotonic()
+    result = runner.invoke(app, ["triage"])
+    elapsed = time.monotonic() - start
+    assert result.exit_code == 0
+    # 500-alert parse must complete well within 10 seconds
+    assert elapsed < 10.0
+
+
+def test_triage_unicode_alert_titles(tmp_path):
+    """triage should handle Unicode characters in alert titles."""
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    alerts_content = (
+        "# Active Alerts\n"
+        "## P1 — Important\n"
+        "### [ALERT-001] Ünïcödé: 日本語 テスト 🚀\n"
+        "**Severity**: P1\n**Status**:   Open\n\n"
+        "## RESOLVED\n"
+    )
+    with open(".ai/ALERTS.md", "w", encoding="utf-8") as f:
+        f.write(alerts_content)
+    result = runner.invoke(app, ["triage"])
+    assert result.exit_code == 0
+    assert "ALERT-001" in result.output
+
+
+def test_triage_windows_crlf_alerts(tmp_path):
+    """triage should parse ALERTS.md with Windows CRLF line endings."""
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    alerts_content = (
+        "# Active Alerts\r\n"
+        "## P0 — Blocking\r\n"
+        "### [ALERT-001] CRLF alert\r\n"
+        "**Severity**: P0\r\n**Status**:   Open\r\n\r\n"
+        "## RESOLVED\r\n"
+    )
+    with open(".ai/ALERTS.md", "wb") as f:
+        f.write(alerts_content.encode("utf-8"))
+    result = runner.invoke(app, ["triage"])
+    assert result.exit_code == 0
+    assert "ALERT-001" in result.output
+
+
+def test_triage_detects_merge_conflict(tmp_path):
+    """triage should report merge conflict markers in source files."""
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    conflict_file = tmp_path / "conflict.py"
+    conflict_file.write_text(
+        "x = 1\n<<<<<<< HEAD\nfoo = 'ours'\n=======\nfoo = 'theirs'\n>>>>>>> branch\n",
+        encoding="utf-8",
+    )
+    result = runner.invoke(app, ["triage"])
+    assert result.exit_code == 0
+    assert "conflict" in result.output.lower() or "Merge conflict" in result.output
+
+
+def test_triage_detects_env_secret(tmp_path):
+    """triage should warn about .env files in the working directory."""
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    with open(".env", "w") as f:
+        f.write("SECRET_KEY=hunter2\n")
+    result = runner.invoke(app, ["triage"])
+    assert result.exit_code == 0
+    assert ".env" in result.output
+
+
+# ---------------------------------------------------------------------------
+# Regression tests
+# ---------------------------------------------------------------------------
+
+def test_alert_deduplication_many_duplicates(tmp_path):
+    """parse_alerts should return all unique IDs even with many duplicate blocks."""
+    from aiorch._helpers import parse_alerts
+    alerts_md = tmp_path / "ALERTS.md"
+    # Write 50 identical-looking alert blocks
+    content = "# Alerts\n## P2 — Noted\n"
+    for i in range(1, 51):
+        content += f"### [ALERT-{i:03d}] Dup test alert {i}\n**Severity**: P2\n**Status**:   Open\n\n"
+    content += "## RESOLVED\n"
+    alerts_md.write_text(content, encoding="utf-8")
+    alerts = parse_alerts(str(alerts_md))
+    ids = [a["id"] for a in alerts]
+    assert len(ids) == 50
+    assert len(set(ids)) == 50  # all unique
+
+
+def test_next_action_id_many_existing(tmp_path):
+    """_next_action_id should correctly compute the next ID after many entries."""
+    from aiorch._helpers import _next_action_id
+    pending_md = tmp_path / "PENDING.md"
+    lines = ["## Database\n"]
+    for i in range(1, 101):
+        lines.append(f"### [DB-{i:03d}] Action {i}\n**Status**: Pending\n\n")
+    pending_md.write_text("".join(lines), encoding="utf-8")
+    next_id = _next_action_id(str(pending_md), "DB")
+    assert next_id == "DB-101"
+
+
+def test_parse_lint_rules_many_rules(tmp_path):
+    """parse_lint_rules should handle files with many rule entries."""
+    from aiorch._helpers import parse_lint_rules
+    lines = ["# Wheels\n\n## 4. Lint Rules (enforced at pre-commit)\n\n"]
+    for i in range(1, 21):
+        lines.append(
+            f"### [LINT-{i:03d}] Rule {i}\n"
+            f"**Pattern**: `pattern{i}`\n"
+            f"**Files**: *.py\n"
+            f"**Message**: Message {i}.\n\n"
+        )
+    wheels_md = tmp_path / "WHEELS.md"
+    wheels_md.write_text("".join(lines), encoding="utf-8")
+    rules = parse_lint_rules(str(wheels_md))
+    assert len(rules) == 20
+    assert rules[-1]["message"] == "Message 20."
+
+
+# ---------------------------------------------------------------------------
+# Error handling tests
+# ---------------------------------------------------------------------------
+
+def test_triage_test_command_failure(tmp_path):
+    """triage should report a failed test command without crashing."""
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    config_path = ".ai/config.json"
+    with open(config_path, "r", encoding="utf-8") as f:
+        config_data = json.load(f)
+    config_data["test_command"] = "exit 1"
+    with open(config_path, "w", encoding="utf-8") as f:
+        json.dump(config_data, f)
+    result = runner.invoke(app, ["triage"])
+    assert result.exit_code == 0
+    # Should mention test failure
+    assert "failed" in result.output.lower() or "error" in result.output.lower()
+
+
+def test_handoff_invalid_task_type_falls_back(tmp_path):
+    """handoff should fall back to 'feature' for unrecognised task types."""
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    result = runner.invoke(app, ["handoff"], input="invalidtype\nDid work\nfile.py\nn\nn\nn\n")
+    assert result.exit_code == 0
+    assert "Recommended model" in result.output
+
+
+def test_update_alerts_md_section(tmp_path):
+    """update command should work on ALERTS.md, not just CONTEXT.md."""
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    result = runner.invoke(app, ["update", "--section", "P2", "--value", "- custom note", "--file", "ALERTS.md"])
+    # Either succeeds or reports section not found — must not crash
+    assert result.exit_code in (0, 1)
+    assert result.exception is None
+
+
+def test_action_add_infra_type(tmp_path):
+    """action-add should create INFRA-prefix IDs for infra type."""
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    result = runner.invoke(app, ["action-add", "Deploy to prod", "--type", "infra", "--target", "AWS"])
+    assert result.exit_code == 0
+    assert "INFRA-001" in result.output
+    with open(".ai/PENDING.md", "r", encoding="utf-8") as f:
+        content = f.read()
+    assert "Deploy to prod" in content
+
+
+def test_action_add_other_type(tmp_path):
+    """action-add with unknown type should create ACTION-prefix IDs."""
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    result = runner.invoke(app, ["action-add", "Manual step", "--type", "other"])
+    assert result.exit_code == 0
+    assert "ACTION-001" in result.output
+
+
+def test_action_resolve_already_done_action(tmp_path):
+    """action-resolve on an already-resolved ID should still succeed (idempotent write)."""
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    runner.invoke(app, ["action-add", "First action", "--type", "db"])
+    runner.invoke(app, ["action-resolve", "DB-001"])
+    # Resolving again should either succeed or exit 1, but not crash
+    result = runner.invoke(app, ["action-resolve", "DB-001"])
+    assert result.exception is None
+
+
+def test_action_add_unicode_title(tmp_path):
+    """action-add should store Unicode titles correctly."""
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    title = "Créer table 日本語 🗄️"
+    result = runner.invoke(app, ["action-add", title, "--type", "db"])
+    assert result.exit_code == 0
+    with open(".ai/PENDING.md", "r", encoding="utf-8") as f:
+        content = f.read()
+    assert "Créer table" in content
+
+
+def test_triage_no_pending_file(tmp_path):
+    """triage should not crash when PENDING.md does not exist."""
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    pending = tmp_path / ".ai" / "PENDING.md"
+    if pending.exists():
+        pending.unlink()
+    result = runner.invoke(app, ["triage"])
+    assert result.exit_code == 0
+    assert result.exception is None
+
+
+# ---------------------------------------------------------------------------
+# Integration tests
+# ---------------------------------------------------------------------------
+
+def test_full_workflow_init_triage_handoff_check(tmp_path):
+    """Full workflow: init → triage → handoff → check should all succeed."""
+    os.chdir(tmp_path)
+    subprocess.run(["git", "init"], check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test"], check=True)
+    subprocess.run(["git", "config", "user.email", "t@t.com"], check=True)
+
+    # init
+    result = runner.invoke(app, ["init"])
+    assert result.exit_code == 0
+
+    # triage
+    result = runner.invoke(app, ["triage"])
+    assert result.exit_code == 0
+
+    # handoff — updates CONTEXT.md
+    result = runner.invoke(app, ["handoff"], input="feature\nBuilt widget\nwidget.py\nn\nn\nn\n")
+    assert result.exit_code == 0
+
+    # Stage a codebase file AND the updated .ai/ file, then check passes
+    with open("widget.py", "w") as f:
+        f.write("x = 1\n")
+
+    with open("init.txt", "w") as f:
+        f.write("init")
+    subprocess.run(["git", "add", "init.txt"], check=True)
+    subprocess.run(["git", "commit", "-m", "init"], check=True)
+
+    subprocess.run(["git", "add", "widget.py", ".ai/CONTEXT.md"], check=True)
+    result = runner.invoke(app, ["check"])
+    assert result.exit_code == 0
+
+
+def test_full_workflow_action_add_and_resolve(tmp_path):
+    """Full action lifecycle: add multiple actions, resolve them, verify DONE section."""
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+
+    runner.invoke(app, ["action-add", "Create schema", "--type", "db", "--sql", "CREATE TABLE t (id INT);"])
+    runner.invoke(app, ["action-add", "Add indexes", "--type", "db"])
+    runner.invoke(app, ["action-add", "Deploy infra", "--type", "infra"])
+
+    with open(".ai/PENDING.md", "r", encoding="utf-8") as f:
+        content = f.read()
+    assert "DB-001" in content
+    assert "DB-002" in content
+    assert "INFRA-001" in content
+
+    runner.invoke(app, ["action-resolve", "DB-001"])
+    runner.invoke(app, ["action-resolve", "INFRA-001"])
+
+    with open(".ai/PENDING.md", "r", encoding="utf-8") as f:
+        content = f.read()
+    assert "## DONE" in content
+    # DB-002 should still be pending
+    pending = [a for a in content.split("### [") if "DB-002" in a]
+    assert any("Pending" in block for block in pending)
+
+
+def test_snapshot_with_syntax_error_file(tmp_path):
+    """snapshot should skip files with syntax errors gracefully."""
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    src = tmp_path / "src" / "pkg"
+    src.mkdir(parents=True)
+    (src / "good.py").write_text("def ok(): pass\n", encoding="utf-8")
+    (src / "bad.py").write_text("def broken(:\n", encoding="utf-8")  # syntax error
+    result = runner.invoke(app, ["snapshot", "--src", str(tmp_path / "src")])
+    assert result.exit_code == 0
+    with open(".ai/CONTEXT.md", "r", encoding="utf-8") as f:
+        content = f.read()
+    assert "ok" in content  # good file parsed
+    # bad.py should be silently skipped
+
+
+def test_handoff_with_alert_and_decision(tmp_path):
+    """handoff should add alert and decision entries to their respective files."""
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    # Inputs: task=feature, accomplished, files, add_alert=y, id, title, severity, decision=y, id, title, context, commit=n
+    result = runner.invoke(
+        app, ["handoff"],
+        input=(
+            "feature\n"
+            "Implemented auth\n"
+            "auth.py\n"
+            "y\n"
+            "ALERT-002\n"
+            "Auth not rate-limited\n"
+            "P1\n"
+            "y\n"
+            "DEC-001\n"
+            "Use JWT tokens\n"
+            "Stateless auth required\n"
+            "n\n"
+        ),
+    )
+    assert result.exit_code == 0
+
+    with open(".ai/ALERTS.md", "r", encoding="utf-8") as f:
+        alerts = f.read()
+    assert "ALERT-002" in alerts
+
+    with open(".ai/DECISIONS.md", "r", encoding="utf-8") as f:
+        decisions = f.read()
+    assert "DEC-001" in decisions
+    assert "Use JWT tokens" in decisions

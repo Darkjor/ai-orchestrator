@@ -1,6 +1,5 @@
 import os
 import shutil
-import json
 import re
 import datetime
 import subprocess
@@ -10,7 +9,9 @@ from rich.table import Table
 from rich.panel import Panel
 from aiorch._helpers import (parse_alerts, parse_lint_rules, check_staged_lint, update_section,
                              generate_snapshot, inject_snapshot, parse_pending, _next_action_id,
-                             _insert_action, _resolve_action)
+                             _insert_action, _resolve_action, _insert_alert, _next_alert_id,
+                             load_config, update_context, append_decision, run_git_commit,
+                             _has_merge_conflicts)
 
 app = typer.Typer(help="Global AI Orchestrator CLI")
 console = Console()
@@ -79,14 +80,10 @@ def triage():
 
     console.print("\n[bold]Recommended Claude Models[/bold]")
     config_path = os.path.join(".ai", "config.json")
-    models_config = None
-    if os.path.exists(config_path):
-        try:
-            with open(config_path, "r", encoding="utf-8") as f:
-                config = json.load(f)
-            models_config = config.get("models", {})
-        except Exception:
-            pass
+    config = load_config(config_path)
+    if os.path.exists(config_path) and not config:
+        console.print("[yellow][WARN] .ai/config.json is missing or corrupt — using defaults.[/yellow]")
+    models_config = config.get("models", {}) if config else None
 
     if models_config:
         default_model = models_config.get("default", "claude-sonnet-4-6")
@@ -102,23 +99,31 @@ def triage():
         console.print("[dim]No model recommendations configured in .ai/config.json[/dim]")
         
     console.print("\n[bold]Checking for git merge conflicts...[/bold]")
-    conflict_found = False
-    for root, dirs, files in os.walk("."):
-        if any(ignored in root for ignored in [".git", "venv", ".venv", "node_modules", "__pycache__", ".pytest_cache"]):
-            continue
-        for file in files:
-            file_path = os.path.join(root, file)
-            if not file.endswith((".py", ".gd", ".go", ".js", ".ts", ".json", ".md", ".txt", ".html", ".xml", ".yml", ".yaml")):
+    # Fast path: use git grep (O(diff)) when inside a git repo; fall back to
+    # file scan only when git is unavailable.
+    if os.path.exists(".git") and _has_merge_conflicts():
+        console.print("[red][ERROR] Merge conflicts detected in working tree.[/red]")
+    elif not os.path.exists(".git"):
+        # No git repo — do a file scan as fallback.
+        conflict_found = False
+        for root, dirs, files in os.walk("."):
+            if any(ig in root for ig in [".git", "venv", ".venv", "node_modules", "__pycache__", ".pytest_cache"]):
                 continue
-            try:
-                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                    content = f.read()
+            for file in files:
+                if not file.endswith((".py", ".gd", ".go", ".js", ".ts", ".json", ".md", ".txt", ".html", ".xml", ".yml", ".yaml")):
+                    continue
+                file_path = os.path.join(root, file)
+                try:
+                    with open(file_path, "r", encoding="utf-8", errors="ignore") as fh:
+                        content = fh.read()
                     if re.search(r'^<{7}', content, re.MULTILINE) and re.search(r'^={7}$', content, re.MULTILINE):
                         console.print(f"[red][ERROR] Merge conflict found in {file_path}[/red]")
                         conflict_found = True
-            except Exception:
-                pass
-    if not conflict_found:
+                except Exception:
+                    pass
+        if not conflict_found:
+            console.print("[green][OK] No active merge conflicts detected.[/green]")
+    else:
         console.print("[green][OK] No active merge conflicts detected.[/green]")
         
     console.print("\n[bold]Checking for exposed secrets...[/bold]")
@@ -143,25 +148,23 @@ def triage():
     else:
         console.print("[green][OK] No secret/credential leaks detected.[/green]")
 
-    config_path = os.path.join(".ai", "config.json")
-    if os.path.exists(config_path):
+    test_cmd = config.get("test_command") if config else None
+    if test_cmd:
+        console.print(f"\n[bold]Running test command: {test_cmd}...[/bold]")
         try:
-            with open(config_path, "r", encoding="utf-8") as f:
-                config = json.load(f)
-            test_cmd = config.get("test_command")
-            if test_cmd:
-                console.print(f"\n[bold]Running test command: {test_cmd}...[/bold]")
-                test_res = subprocess.run(test_cmd, shell=True, capture_output=True, text=True)
-                if test_res.returncode == 0:
-                    console.print("[green][OK] Tests passed successfully![/green]")
-                else:
-                    console.print(f"[red][ERROR] Test command failed with exit code {test_res.returncode}[/red]")
-                    if test_res.stdout:
-                        console.print(test_res.stdout)
-                    if test_res.stderr:
-                        console.print(test_res.stderr)
+            test_res = subprocess.run(test_cmd, shell=True, capture_output=True, text=True, timeout=30)
+            if test_res.returncode == 0:
+                console.print("[green][OK] Tests passed successfully![/green]")
+            else:
+                console.print(f"[red][ERROR] Test command failed with exit code {test_res.returncode}[/red]")
+                if test_res.stdout:
+                    console.print(test_res.stdout)
+                if test_res.stderr:
+                    console.print(test_res.stderr)
+        except subprocess.TimeoutExpired:
+            console.print("[yellow][WARN] Test command timed out after 30 seconds.[/yellow]")
         except Exception as e:
-            console.print(f"[yellow][WARN] Warning: Could not run test command. Reason: {e}[/yellow]")
+            console.print(f"[yellow][WARN] Could not run test command. Reason: {e}[/yellow]")
 
 @app.command()
 def check():
@@ -257,14 +260,10 @@ def handoff(
     console.print(Panel("[bold green]AI Orchestrator — Session Handoff Wizard[/bold green]", expand=False))
 
     config_path = os.path.join(".ai", "config.json")
-    models_config = None
-    if os.path.exists(config_path):
-        try:
-            with open(config_path, "r", encoding="utf-8") as f:
-                config = json.load(f)
-            models_config = config.get("models", {})
-        except Exception:
-            pass
+    config = load_config(config_path)
+    if os.path.exists(config_path) and not config:
+        console.print("[yellow][WARN] .ai/config.json is missing or corrupt — model recommendations unavailable.[/yellow]")
+    models_config = config.get("models", {}) if config else None
 
     valid_task_types = ["architecture", "code_review", "refactoring", "bugfix", "feature", "tests", "docs"]
     task_type = typer.prompt(
@@ -286,26 +285,35 @@ def handoff(
     add_alert = typer.confirm("Do you want to add a new blocker/alert?", default=False)
     new_alert_data = None
     if add_alert:
-        alert_id = typer.prompt("Alert ID (e.g. ALERT-002)")
+        alerts_path = os.path.join(".ai", "ALERTS.md")
+        alert_id = typer.prompt("Alert ID (leave blank to auto-assign)", default="")
+        if not alert_id.strip():
+            alert_id = _next_alert_id(alerts_path)
         alert_title = typer.prompt("Short description")
-        alert_severity = typer.prompt("Severity (P0 / P1 / P2)", default="P2")
-        new_alert_data = {
-            "id": alert_id,
-            "title": alert_title,
-            "severity": alert_severity.upper()
-        }
+        if not alert_title.strip():
+            console.print("[yellow][WARN] Alert title is empty — skipping alert.[/yellow]")
+        else:
+            alert_severity = typer.prompt("Severity (P0 / P1 / P2)", default="P2")
+            new_alert_data = {
+                "id": alert_id.strip(),
+                "title": alert_title.strip(),
+                "severity": alert_severity.upper()
+            }
 
     add_decision = typer.confirm("Do you want to document a new design decision?", default=False)
     new_dec_data = None
     if add_decision:
         dec_id = typer.prompt("Decision ID (e.g. DEC-002)")
         dec_title = typer.prompt("Short title")
-        dec_context = typer.prompt("Decision context / rationale")
-        new_dec_data = {
-            "id": dec_id,
-            "title": dec_title,
-            "context": dec_context
-        }
+        if not dec_id.strip() or not dec_title.strip():
+            console.print("[yellow][WARN] Decision ID or title is empty — skipping decision.[/yellow]")
+        else:
+            dec_context = typer.prompt("Decision context / rationale")
+            new_dec_data = {
+                "id": dec_id.strip(),
+                "title": dec_title.strip(),
+                "context": dec_context,
+            }
 
     make_commit = typer.confirm("Do you want to stage all changes and create a git commit?", default=False)
     commit_data = None
@@ -321,98 +329,30 @@ def handoff(
 
     # --- PROCESS UPDATES ---
     today_str = datetime.date.today().strftime("%Y-%m-%d")
-    
-    # Update CONTEXT.md
+
     context_path = os.path.join(".ai", "CONTEXT.md")
-    if os.path.exists(context_path):
-        with open(context_path, "r", encoding="utf-8") as f:
-            content = f.read()
-            
-        content = re.sub(
-            r"## Current State \(updated: [^\)]+\)", 
-            f"## Current State (updated: {today_str})", 
-            content
-        )
-        
-        if accomplishments:
-            lines = content.splitlines()
-            for i, line in enumerate(lines):
-                if "**What works right now:**" in line:
-                    new_bullets = [f"- {acc.strip()}" for acc in accomplishments.split(",") if acc.strip()]
-                    lines = lines[:i+1] + new_bullets + lines[i+1:]
-                    break
-            content = "\n".join(lines)
-            
-        if changed_files:
-            lines = content.splitlines()
-            for i, line in enumerate(lines):
-                if "**Most recently changed:**" in line:
-                    new_bullets = [f"- {cf.strip()}" for cf in changed_files.split(",") if cf.strip()]
-                    next_sec_idx = len(lines)
-                    for j in range(i+1, len(lines)):
-                        if lines[j].strip().startswith("---") or lines[j].strip().startswith("##"):
-                            next_sec_idx = j
-                            break
-                    lines = lines[:i+1] + new_bullets + lines[next_sec_idx:]
-                    break
-            content = "\n".join(lines)
-            
-        with open(context_path, "w", encoding="utf-8") as f:
-            f.write(content)
+    if update_context(context_path, today_str, accomplishments, changed_files):
         console.print("[green][OK] Updated .ai/CONTEXT.md[/green]")
 
     if new_alert_data:
         alerts_path = os.path.join(".ai", "ALERTS.md")
-        if os.path.exists(alerts_path):
-            with open(alerts_path, "r", encoding="utf-8") as f:
-                lines = f.readlines()
-                
-            header_pattern = f"## {new_alert_data['severity']}"
-            inserted = False
-            for i, line in enumerate(lines):
-                if header_pattern in line:
-                    alert_md = (
-                        f"\n### [{new_alert_data['id']}] {new_alert_data['title']}\n"
-                        f"**Severity**: {new_alert_data['severity']}\n"
-                        f"**Status**:   Open\n"
-                        f"**Owner**:    None\n"
-                        f"**Discovered**: {today_str}\n"
-                        f"**Impact**: [TBD]\n"
-                        f"**Fix**: [TBD]\n"
-                    )
-                    lines.insert(i+1, alert_md)
-                    inserted = True
-                    break
-            if inserted:
-                with open(alerts_path, "w", encoding="utf-8") as f:
-                    f.writelines(lines)
-                console.print(f"[green][OK] Added alert {new_alert_data['id']} to .ai/ALERTS.md[/green]")
+        if _insert_alert(alerts_path, new_alert_data, today_str):
+            console.print(f"[green][OK] Added alert {new_alert_data['id']} to .ai/ALERTS.md[/green]")
+        else:
+            console.print(f"[yellow][WARN] Could not find severity section for {new_alert_data['severity']} in ALERTS.md[/yellow]")
 
     if new_dec_data:
         decisions_path = os.path.join(".ai", "DECISIONS.md")
-        if os.path.exists(decisions_path):
-            decision_md = (
-                f"\n## [{new_dec_data['id']}] {new_dec_data['title']}\n"
-                f"**Date**: {today_str}\n"
-                f"**Status**: Active\n"
-                f"**Context**: {new_dec_data['context']}\n"
-                f"**Decision**: [TBD]\n"
-                f"**Rationale**: [TBD]\n"
-                f"**Consequences**: [TBD]\n"
-                f"**Revisit when**: [TBD]\n"
-            )
-            with open(decisions_path, "a", encoding="utf-8") as f:
-                f.write(decision_md)
-            console.print(f"[green][OK] Recorded decision {new_dec_data['id']} in .ai/DECISIONS.md[/green]")
+        append_decision(decisions_path, new_dec_data, today_str)
+        console.print(f"[green][OK] Recorded decision {new_dec_data['id']} in .ai/DECISIONS.md[/green]")
 
     if commit_data:
-        try:
-            subprocess.run(["git", "add", "."], check=True)
-            commit_msg_full = f"[{commit_data['block']}] {commit_data['type']}: {commit_data['msg']}"
-            subprocess.run(["git", "commit", "-m", commit_msg_full], check=True)
-            console.print(f"[green][OK] Successfully created commit: {commit_msg_full}[/green]")
-        except Exception as e:
-            console.print(f"[red][ERROR] Git commit failed: {e}[/red]")
+        ok, detail = run_git_commit(commit_data["block"], commit_data["type"], commit_data["msg"])
+        if ok:
+            console.print(f"[green][OK] Successfully created commit: {detail}[/green]")
+        else:
+            console.print(f"[red][ERROR] {detail}[/red]")
+            raise typer.Exit(1)
 
     if with_snapshot:
         context_path = os.path.join(".ai", "CONTEXT.md")
@@ -459,6 +399,9 @@ def action_add(
     steps: str = typer.Option("", "--steps", help="Manual steps description"),
 ):
     """Add a pending manual action to .ai/PENDING.md."""
+    if not title.strip():
+        console.print("[red]Error: title cannot be empty.[/red]")
+        raise typer.Exit(1)
     pending_path = os.path.join(".ai", "PENDING.md")
     if not os.path.exists(pending_path):
         tmpl = os.path.join(os.path.dirname(__file__), "templates", "PENDING.md")
@@ -478,6 +421,9 @@ def action_add(
 @app.command("action-resolve")
 def action_resolve(action_id: str = typer.Argument(..., help="Action ID to mark as done (e.g. DB-001)")):
     """Mark a pending action as done and move it to DONE."""
+    if not action_id.strip():
+        console.print("[red]Error: action_id cannot be empty.[/red]")
+        raise typer.Exit(1)
     pending_path = os.path.join(".ai", "PENDING.md")
     if not os.path.exists(pending_path):
         console.print("[red]Error: .ai/PENDING.md not found.[/red]")
