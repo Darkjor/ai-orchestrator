@@ -8,7 +8,9 @@ import typer
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
-from aiorch._helpers import parse_alerts, parse_lint_rules, check_staged_lint, update_section, generate_snapshot, inject_snapshot
+from aiorch._helpers import (parse_alerts, parse_lint_rules, check_staged_lint, update_section,
+                             generate_snapshot, inject_snapshot, parse_pending, _next_action_id,
+                             _insert_action, _resolve_action)
 
 app = typer.Typer(help="Global AI Orchestrator CLI")
 console = Console()
@@ -64,6 +66,16 @@ def triage():
         console.print(table)
     else:
         console.print("[green][OK] No active alerts found in ALERTS.md[/green]")
+
+    pending = parse_pending(os.path.join(".ai", "PENDING.md"))
+    if pending:
+        pt = Table(title="Pending Manual Actions", header_style="bold cyan")
+        pt.add_column("ID", style="dim", width=12)
+        pt.add_column("Type")
+        pt.add_column("Title")
+        for a in pending:
+            pt.add_row(a["id"], a["type"], a["title"])
+        console.print(pt)
 
     console.print("\n[bold]Recommended Claude Models[/bold]")
     config_path = os.path.join(".ai", "config.json")
@@ -254,7 +266,6 @@ def handoff(
         except Exception:
             pass
 
-    # 1. Task Type Selection
     valid_task_types = ["architecture", "code_review", "refactoring", "bugfix", "feature", "tests", "docs"]
     task_type = typer.prompt(
         "What type of work did you complete? (architecture/code_review/refactoring/bugfix/feature/tests/docs)",
@@ -270,13 +281,8 @@ def handoff(
         if task_type in reasoning_tasks:
             console.print("[yellow]✓ This task benefits from extended thinking mode[/yellow]")
 
-    # 2. Accomplishments
     accomplishments = typer.prompt("What was accomplished in this block? (comma-separated, or empty to skip)", default="", show_default=False)
-
-    # 3. Changed files
     changed_files = typer.prompt("What files or components were recently changed? (comma-separated, or empty to skip)", default="", show_default=False)
-
-    # 4. Blocker/Alert
     add_alert = typer.confirm("Do you want to add a new blocker/alert?", default=False)
     new_alert_data = None
     if add_alert:
@@ -289,7 +295,6 @@ def handoff(
             "severity": alert_severity.upper()
         }
 
-    # 5. Design Decision
     add_decision = typer.confirm("Do you want to document a new design decision?", default=False)
     new_dec_data = None
     if add_decision:
@@ -302,7 +307,6 @@ def handoff(
             "context": dec_context
         }
 
-    # 6. Git Commit
     make_commit = typer.confirm("Do you want to stage all changes and create a git commit?", default=False)
     commit_data = None
     if make_commit:
@@ -357,7 +361,6 @@ def handoff(
             f.write(content)
         console.print("[green][OK] Updated .ai/CONTEXT.md[/green]")
 
-    # Update ALERTS.md
     if new_alert_data:
         alerts_path = os.path.join(".ai", "ALERTS.md")
         if os.path.exists(alerts_path):
@@ -385,7 +388,6 @@ def handoff(
                     f.writelines(lines)
                 console.print(f"[green][OK] Added alert {new_alert_data['id']} to .ai/ALERTS.md[/green]")
 
-    # Update DECISIONS.md
     if new_dec_data:
         decisions_path = os.path.join(".ai", "DECISIONS.md")
         if os.path.exists(decisions_path):
@@ -403,12 +405,9 @@ def handoff(
                 f.write(decision_md)
             console.print(f"[green][OK] Recorded decision {new_dec_data['id']} in .ai/DECISIONS.md[/green]")
 
-    # Process Git commit
     if commit_data:
         try:
-            # Stage everything
             subprocess.run(["git", "add", "."], check=True)
-            # Commit
             commit_msg_full = f"[{commit_data['block']}] {commit_data['type']}: {commit_data['msg']}"
             subprocess.run(["git", "commit", "-m", commit_msg_full], check=True)
             console.print(f"[green][OK] Successfully created commit: {commit_msg_full}[/green]")
@@ -448,6 +447,45 @@ def update(
         console.print(f"[green][OK] Updated '{section}' in {file}[/green]")
     else:
         console.print(f"[red]Error: Section '{section}' not found in {filepath}[/red]")
+        raise typer.Exit(1)
+
+
+@app.command("action-add")
+def action_add(
+    title: str = typer.Argument(..., help="Short description of the action"),
+    action_type: str = typer.Option("other", "--type", "-t", help="Type: db | infra | other"),
+    target: str = typer.Option("[TBD]", "--target", help="Where to perform the action"),
+    sql: str = typer.Option("", "--sql", help="SQL to run (for db actions)"),
+    steps: str = typer.Option("", "--steps", help="Manual steps description"),
+):
+    """Add a pending manual action to .ai/PENDING.md."""
+    pending_path = os.path.join(".ai", "PENDING.md")
+    if not os.path.exists(pending_path):
+        tmpl = os.path.join(os.path.dirname(__file__), "templates", "PENDING.md")
+        shutil.copy(tmpl, pending_path)
+    prefix = {"db": "DB", "infra": "INFRA"}.get(action_type.lower(), "ACTION")
+    action_id = _next_action_id(pending_path, prefix)
+    today = datetime.date.today().strftime("%Y-%m-%d")
+    data = {"id": action_id, "title": title, "type": action_type, "target": target,
+            "sql": sql or None, "steps": steps or None}
+    if _insert_action(pending_path, data, today):
+        console.print(f"[green][OK] Added {action_id}: {title}[/green]")
+    else:
+        console.print(f"[red]Error: Section for type '{action_type}' not found[/red]")
+        raise typer.Exit(1)
+
+
+@app.command("action-resolve")
+def action_resolve(action_id: str = typer.Argument(..., help="Action ID to mark as done (e.g. DB-001)")):
+    """Mark a pending action as done and move it to DONE."""
+    pending_path = os.path.join(".ai", "PENDING.md")
+    if not os.path.exists(pending_path):
+        console.print("[red]Error: .ai/PENDING.md not found.[/red]")
+        raise typer.Exit(1)
+    if _resolve_action(pending_path, action_id):
+        console.print(f"[green][OK] {action_id} marked as Done[/green]")
+    else:
+        console.print(f"[red]Error: {action_id} not found in PENDING.md[/red]")
         raise typer.Exit(1)
 
 

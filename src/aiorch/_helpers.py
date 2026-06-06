@@ -157,6 +157,82 @@ def inject_snapshot(context_path: str, snapshot_text: str) -> None:
         f.write(content)
 
 
+def parse_pending(pending_path: str) -> list:
+    """Return open pending actions from PENDING.md."""
+    if not os.path.exists(pending_path):
+        return []
+    actions = []
+    current_type = "Other"
+    with open(pending_path, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+    for line in lines:
+        s = line.strip()
+        if s.startswith("## Database"):
+            current_type = "Database"
+        elif s.startswith("## Infrastructure"):
+            current_type = "Infrastructure"
+        elif s.startswith("## Other"):
+            current_type = "Other"
+        elif s.startswith("## DONE"):
+            current_type = "DONE"
+        m = re.search(r"### \[([A-Z]+-\d+)\]\s*(.*)", s)
+        if m and current_type != "DONE":
+            actions.append({"id": m.group(1), "title": m.group(2), "type": current_type})
+    return actions
+
+
+def _next_action_id(pending_path: str, prefix: str) -> str:
+    """Return next sequential ID for a given prefix (DB, INFRA, ACTION)."""
+    if not os.path.exists(pending_path):
+        return f"{prefix}-001"
+    with open(pending_path, "r", encoding="utf-8") as f:
+        content = f.read()
+    numbers = [int(m.group(1)) for m in re.finditer(rf"\[{prefix}-(\d+)\]", content)]
+    return f"{prefix}-{(max(numbers) + 1):03d}" if numbers else f"{prefix}-001"
+
+
+def _insert_action(pending_path: str, data: dict, today_str: str) -> bool:
+    """Insert action block under its type section. Returns True on success."""
+    type_to_header = {"db": "## Database", "infra": "## Infrastructure", "other": "## Other"}
+    header = type_to_header.get(data["type"].lower(), "## Other")
+    sql_block = f"\n**SQL**:\n```sql\n{data['sql']}\n```" if data.get("sql") else ""
+    steps_line = f"\n**Steps**: {data['steps']}\n1. Run: `ai-orch action-resolve {data['id']}`\n" if data.get("steps") else f"\n**Steps**: [TBD]\n1. Run: `ai-orch action-resolve {data['id']}`\n"
+    block = (
+        f"\n### [{data['id']}] {data['title']}\n"
+        f"**Status**: Pending\n**Target**: {data.get('target', '[TBD]')}\n**Discovered**: {today_str}"
+        f"{sql_block}{steps_line}"
+    )
+    with open(pending_path, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+    for i, line in enumerate(lines):
+        if header in line:
+            lines.insert(i + 1, block)
+            with open(pending_path, "w", encoding="utf-8") as f:
+                f.writelines(lines)
+            return True
+    return False
+
+
+def _resolve_action(pending_path: str, action_id: str) -> bool:
+    """Mark action as Done and move block to ## DONE section."""
+    with open(pending_path, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+    start = next((i for i, l in enumerate(lines) if re.search(rf"### \[{re.escape(action_id)}\]", l)), -1)
+    if start == -1:
+        return False
+    end = next((j for j in range(start + 1, len(lines)) if re.match(r"#{2,3} ", lines[j])), len(lines))
+    block = [l.replace("**Status**: Pending", "**Status**: Done") for l in lines[start:end]]
+    remaining = lines[:start] + lines[end:]
+    done = next((i for i, l in enumerate(remaining) if l.strip() == "## DONE"), -1)
+    if done == -1:
+        remaining += ["\n## DONE\n"] + block
+    else:
+        remaining = remaining[:done + 1] + ["\n"] + block + remaining[done + 1:]
+    with open(pending_path, "w", encoding="utf-8") as f:
+        f.writelines(remaining)
+    return True
+
+
 def check_staged_lint(staged_files: list, rules: list) -> list:
     """Check staged file content against lint rules. Returns list of violation dicts."""
     violations = []

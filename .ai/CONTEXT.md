@@ -19,9 +19,10 @@ All 19 tests pass. No active alerts.
 
 ## Most recently changed
 
-- `src/aiorch/main.py` — Added `ai-orch snapshot` command and `handoff --snapshot` flag
-- `src/aiorch/_helpers.py` — Added `generate_snapshot()` and `inject_snapshot()` helpers
-- `tests/test_cli.py` — 3 new tests for snapshot (26 total)
+- `src/aiorch/main.py` — Added `action-add` and `action-resolve` commands; triage shows pending actions
+- `src/aiorch/_helpers.py` — Added parse_pending, _insert_action, _resolve_action helpers
+- `src/aiorch/templates/PENDING.md` — New template for out-of-band manual tasks
+- `tests/test_cli.py` — 6 new tests (32 total)
 
 ---
 

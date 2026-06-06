@@ -336,6 +336,64 @@ def test_snapshot_no_ai_folder(tmp_path):
     assert result.exit_code == 1
 
 
+def test_action_add_creates_pending(tmp_path):
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    result = runner.invoke(app, ["action-add", "Create users table", "--type", "db", "--target", "Supabase SQL Editor"])
+    assert result.exit_code == 0
+    assert "DB-001" in result.output
+    with open(".ai/PENDING.md", "r", encoding="utf-8") as f:
+        content = f.read()
+    assert "Create users table" in content
+    assert "**Status**: Pending" in content
+
+
+def test_action_add_with_sql(tmp_path):
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    result = runner.invoke(app, ["action-add", "Create table", "--type", "db", "--sql", "CREATE TABLE x (id INT);"])
+    assert result.exit_code == 0
+    with open(".ai/PENDING.md", "r", encoding="utf-8") as f:
+        content = f.read()
+    assert "CREATE TABLE x" in content
+
+
+def test_action_add_auto_increments(tmp_path):
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    runner.invoke(app, ["action-add", "First", "--type", "db"])
+    runner.invoke(app, ["action-add", "Second", "--type", "db"])
+    with open(".ai/PENDING.md", "r", encoding="utf-8") as f:
+        content = f.read()
+    assert "DB-001" in content
+    assert "DB-002" in content
+
+
+def test_action_resolve_moves_to_done(tmp_path):
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    runner.invoke(app, ["action-add", "Run migration", "--type", "db"])
+    result = runner.invoke(app, ["action-resolve", "DB-001"])
+    assert result.exit_code == 0
+    with open(".ai/PENDING.md", "r", encoding="utf-8") as f:
+        content = f.read()
+    assert "**Status**: Done" in content
+    assert "## DONE" in content
+
+
+def test_action_resolve_missing_id(tmp_path):
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    result = runner.invoke(app, ["action-resolve", "DB-999"])
+    assert result.exit_code == 1
+
+
+def test_action_add_no_ai_folder(tmp_path):
+    os.chdir(tmp_path)
+    result = runner.invoke(app, ["action-add", "Something"])
+    assert result.exit_code != 0 or "PENDING" in result.output
+
+
 def test_handoff_snapshot_flag(tmp_path):
     os.chdir(tmp_path)
     runner.invoke(app, ["init"])
