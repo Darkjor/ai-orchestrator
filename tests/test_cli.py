@@ -86,6 +86,12 @@ def test_hook_install_command(tmp_path):
         content = f.read()
     assert "ai-orch check" in content or "aiorch" in content
 
+    post_hook_path = ".git/hooks/post-commit"
+    assert os.path.exists(post_hook_path)
+    with open(post_hook_path, "r") as f:
+        post_content = f.read()
+    assert "snapshot" in post_content
+
 def test_handoff_command(tmp_path):
     os.chdir(tmp_path)
     runner.invoke(app, ["init"])

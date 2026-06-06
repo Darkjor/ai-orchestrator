@@ -240,13 +240,29 @@ fi
     
     with open(hook_path, "w", encoding="utf-8", newline="\n") as f:
         f.write(hook_content)
-        
     try:
         os.chmod(hook_path, 0o755)
     except Exception as e:
         console.print(f"[yellow]Warning: Could not set executable permission on hook. Reason: {e}[/yellow]")
-        
     console.print(f"[green][OK] Git pre-commit hook installed at {hook_path}[/green]")
+
+    post_hook_path = os.path.join(hook_dir, "post-commit")
+    post_hook_content = """#!/bin/sh
+# AI Orchestrator post-commit: keep codebase snapshot fresh
+
+if command -v ai-orch >/dev/null 2>&1; then
+  ai-orch snapshot --quiet 2>/dev/null || true
+else
+  python -m aiorch.main snapshot --quiet 2>/dev/null || true
+fi
+"""
+    with open(post_hook_path, "w", encoding="utf-8", newline="\n") as f:
+        f.write(post_hook_content)
+    try:
+        os.chmod(post_hook_path, 0o755)
+    except Exception as e:
+        console.print(f"[yellow]Warning: Could not set executable permission on post-commit hook. Reason: {e}[/yellow]")
+    console.print(f"[green][OK] Git post-commit hook installed at {post_hook_path}[/green]")
 
 @app.command()
 def handoff(
@@ -363,14 +379,17 @@ def handoff(
 @app.command()
 def snapshot(
     src: str = typer.Option("src", "--src", help="Source directory to scan (default: src/)"),
+    quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress output (used by post-commit hook)"),
 ):
     """Scan codebase and inject a symbol snapshot into .ai/CONTEXT.md."""
     if not os.path.exists(".ai"):
-        console.print("[red]Error: .ai/ not found. Run 'ai-orch init' first.[/red]")
+        if not quiet:
+            console.print("[red]Error: .ai/ not found. Run 'ai-orch init' first.[/red]")
         raise typer.Exit(1)
     snap = generate_snapshot(src)
     inject_snapshot(os.path.join(".ai", "CONTEXT.md"), snap)
-    console.print("[green][OK] Codebase snapshot injected into CONTEXT.md[/green]")
+    if not quiet:
+        console.print("[green][OK] Codebase snapshot injected into CONTEXT.md[/green]")
 
 @app.command()
 def update(
