@@ -1,3 +1,4 @@
+import ast as _ast
 import os
 import re
 import fnmatch
@@ -114,6 +115,46 @@ def update_section(filepath: str, section: str, value: str) -> bool:
     with open(filepath, "w", encoding="utf-8") as f:
         f.writelines(new_lines)
     return True
+
+
+def generate_snapshot(src_root: str) -> str:
+    """Walk src_root for .py files and return a Markdown symbol list."""
+    lines = []
+    for dirpath, dirs, filenames in os.walk(src_root):
+        dirs.sort()
+        for fname in sorted(filenames):
+            if not fname.endswith(".py"):
+                continue
+            fpath = os.path.join(dirpath, fname)
+            rel = os.path.relpath(fpath).replace(os.sep, "/")
+            try:
+                with open(fpath, "r", encoding="utf-8", errors="ignore") as f:
+                    tree = _ast.parse(f.read(), filename=fpath)
+            except SyntaxError:
+                continue
+            symbols = [
+                n.name for n in tree.body
+                if isinstance(n, (_ast.FunctionDef, _ast.AsyncFunctionDef, _ast.ClassDef))
+            ]
+            if symbols:
+                lines.append(f"- `{rel}`: {', '.join(symbols)}")
+    return "\n".join(lines) if lines else "*(no Python files found)*"
+
+
+def inject_snapshot(context_path: str, snapshot_text: str) -> None:
+    """Upsert a ## Codebase Snapshot section at the end of context_path."""
+    if not os.path.exists(context_path):
+        return
+    with open(context_path, "r", encoding="utf-8") as f:
+        content = f.read()
+    header = "## Codebase Snapshot"
+    new_section = f"{header}\n\n{snapshot_text}\n"
+    if header in content:
+        content = re.sub(r"## Codebase Snapshot\n.*", new_section, content, flags=re.DOTALL)
+    else:
+        content = content.rstrip() + "\n\n---\n\n" + new_section
+    with open(context_path, "w", encoding="utf-8") as f:
+        f.write(content)
 
 
 def check_staged_lint(staged_files: list, rules: list) -> list:

@@ -313,3 +313,41 @@ def test_update_no_ai_folder(tmp_path):
     os.chdir(tmp_path)
     result = runner.invoke(app, ["update", "--section", "Most recently changed", "--value", "x"])
     assert result.exit_code == 1
+
+
+def test_snapshot_injects_symbols(tmp_path):
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    src = tmp_path / "src" / "mypkg"
+    src.mkdir(parents=True)
+    (src / "module.py").write_text("def foo(): pass\nclass Bar: pass\n", encoding="utf-8")
+    result = runner.invoke(app, ["snapshot", "--src", str(tmp_path / "src")])
+    assert result.exit_code == 0
+    with open(".ai/CONTEXT.md", "r", encoding="utf-8") as f:
+        content = f.read()
+    assert "Codebase Snapshot" in content
+    assert "foo" in content
+    assert "Bar" in content
+
+
+def test_snapshot_no_ai_folder(tmp_path):
+    os.chdir(tmp_path)
+    result = runner.invoke(app, ["snapshot"])
+    assert result.exit_code == 1
+
+
+def test_handoff_snapshot_flag(tmp_path):
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    src = tmp_path / "src" / "pkg"
+    src.mkdir(parents=True)
+    (src / "app.py").write_text("def run(): pass\n", encoding="utf-8")
+    result = runner.invoke(
+        app, ["handoff", "--snapshot"],
+        input="feature\nAdded run fn\napp.py\nn\nn\nn\n"
+    )
+    assert result.exit_code == 0
+    with open(".ai/CONTEXT.md", "r", encoding="utf-8") as f:
+        content = f.read()
+    assert "Codebase Snapshot" in content
+    assert "run" in content

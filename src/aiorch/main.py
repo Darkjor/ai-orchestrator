@@ -8,7 +8,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
-from aiorch._helpers import parse_alerts, parse_lint_rules, check_staged_lint, update_section
+from aiorch._helpers import parse_alerts, parse_lint_rules, check_staged_lint, update_section, generate_snapshot, inject_snapshot
 
 app = typer.Typer(help="Global AI Orchestrator CLI")
 console = Console()
@@ -234,7 +234,9 @@ fi
     console.print(f"[green][OK] Git pre-commit hook installed at {hook_path}[/green]")
 
 @app.command()
-def handoff():
+def handoff(
+    with_snapshot: bool = typer.Option(False, "--snapshot", help="Append codebase symbol snapshot to CONTEXT.md"),
+):
     """Run interactive handoff wizard to update .ai documentation and commit changes."""
     if not os.path.exists(".ai"):
         console.print("[red]Error: .ai/ orchestrator folder not found. Run 'ai-orch init' first.[/red]")
@@ -412,6 +414,24 @@ def handoff():
             console.print(f"[green][OK] Successfully created commit: {commit_msg_full}[/green]")
         except Exception as e:
             console.print(f"[red][ERROR] Git commit failed: {e}[/red]")
+
+    if with_snapshot:
+        context_path = os.path.join(".ai", "CONTEXT.md")
+        snap = generate_snapshot("src")
+        inject_snapshot(context_path, snap)
+        console.print("[green][OK] Codebase snapshot injected into CONTEXT.md[/green]")
+
+@app.command()
+def snapshot(
+    src: str = typer.Option("src", "--src", help="Source directory to scan (default: src/)"),
+):
+    """Scan codebase and inject a symbol snapshot into .ai/CONTEXT.md."""
+    if not os.path.exists(".ai"):
+        console.print("[red]Error: .ai/ not found. Run 'ai-orch init' first.[/red]")
+        raise typer.Exit(1)
+    snap = generate_snapshot(src)
+    inject_snapshot(os.path.join(".ai", "CONTEXT.md"), snap)
+    console.print("[green][OK] Codebase snapshot injected into CONTEXT.md[/green]")
 
 @app.command()
 def update(

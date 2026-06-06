@@ -19,9 +19,9 @@ All 19 tests pass. No active alerts.
 
 ## Most recently changed
 
-- `src/aiorch/main.py` — Added `ai-orch update` command (non-interactive section replacement)
-- `src/aiorch/_helpers.py` — Added `update_section()` helper with prefix-matching for headings
-- `tests/test_cli.py` — 4 new tests for update command (23 total)
+- `src/aiorch/main.py` — Added `ai-orch snapshot` command and `handoff --snapshot` flag
+- `src/aiorch/_helpers.py` — Added `generate_snapshot()` and `inject_snapshot()` helpers
+- `tests/test_cli.py` — 3 new tests for snapshot (26 total)
 
 ---
 
