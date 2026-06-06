@@ -9,7 +9,7 @@
 
 - `ai-orch init` — Creates `.ai/` folder with 7 template files
 - `ai-orch triage` — Parses alerts, checks secrets, merge conflicts, runs tests
-- `ai-orch check` — Pre-commit guard: blocks commit if code changed but `.ai/CONTEXT.md` was not updated
+- `ai-orch check` — Pre-commit guard + WHEELS.md lint enforced on staged files
 - `ai-orch hook-install` — Installs git pre-commit hook
 - `ai-orch handoff` — Interactive wizard: updates `.ai/` docs and optionally commits
 
@@ -19,10 +19,8 @@ All 19 tests pass. No active alerts.
 
 ## Most recently changed
 
-- `src/aiorch/main.py` — Fixed false-positive merge conflict detection (line 139, regex `^<{7}`)
-- `.ai/ALERTS.md` — Cleared template placeholder alerts, added resolved ALERT-001
-- `.ai/config.json` — Configured for ai-orch project (model recommendations, test command)
-- `.ai/ORCHESTRATOR.md` — Added Integrated Stack Protocol section (ai-orch + Ruflo + Superpowers)
+- `pyproject.toml` — Added `[tool.setuptools.package-data]` so templates ship with PyPI package
+- `src/aiorch/_helpers.py` — Fixed Windows path separator in `git show`; fixed `_next_alert_id` to count resolved alerts
 
 ---
 
@@ -32,7 +30,7 @@ All 19 tests pass. No active alerts.
 |--------|-------|
 | Python version | 3.10+ |
 | Commands | 5 (init, triage, check, hook-install, handoff) |
-| Tests | 10 (all passing) |
+| Tests | 19 (all passing) |
 | Dependencies | typer>=0.9.0, rich>=13.0.0 |
 | Entry point | `ai-orch` |
 | Template files | 7 (in src/aiorch/templates/) |

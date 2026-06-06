@@ -29,12 +29,24 @@ def parse_alerts(alerts_path: str) -> list:
     return alerts
 
 
+def _all_alert_ids(alerts_path: str) -> list:
+    """Return all ALERT IDs regardless of resolved status."""
+    if not os.path.exists(alerts_path):
+        return []
+    ids = []
+    with open(alerts_path, "r", encoding="utf-8") as f:
+        for line in f:
+            m = re.search(r"### \[(ALERT-(\d+))\]", line)
+            if m:
+                ids.append(int(m.group(2)))
+    return ids
+
+
 def _next_alert_id(alerts_path: str) -> str:
-    """Return next sequential ALERT-XXX ID."""
-    existing = parse_alerts(alerts_path)
-    if not existing:
+    """Return next sequential ALERT-XXX ID, counting resolved alerts too."""
+    numbers = _all_alert_ids(alerts_path)
+    if not numbers:
         return "ALERT-001"
-    numbers = [int(re.search(r"\d+", a["id"]).group()) for a in existing if re.search(r"\d+", a["id"])]
     return f"ALERT-{(max(numbers) + 1):03d}"
 
 
@@ -86,7 +98,8 @@ def check_staged_lint(staged_files: list, rules: list) -> list:
         if not matching:
             continue
         try:
-            result = subprocess.run(["git", "show", f":{filepath}"], capture_output=True, text=True, check=True)
+            git_path = filepath.replace(os.sep, "/")
+            result = subprocess.run(["git", "show", f":{git_path}"], capture_output=True, text=True, check=True)
             content = result.stdout
         except Exception:
             continue
