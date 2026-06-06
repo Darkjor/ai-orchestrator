@@ -8,7 +8,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
-from aiorch._helpers import parse_alerts, parse_lint_rules, check_staged_lint
+from aiorch._helpers import parse_alerts, parse_lint_rules, check_staged_lint, update_section
 
 app = typer.Typer(help="Global AI Orchestrator CLI")
 console = Console()
@@ -412,6 +412,24 @@ def handoff():
             console.print(f"[green][OK] Successfully created commit: {commit_msg_full}[/green]")
         except Exception as e:
             console.print(f"[red][ERROR] Git commit failed: {e}[/red]")
+
+@app.command()
+def update(
+    section: str = typer.Option(..., "--section", "-s", help="Section heading to update"),
+    value: str = typer.Option(..., "--value", "-v", help="New content for the section (use \\n for newlines)"),
+    file: str = typer.Option("CONTEXT.md", "--file", "-f", help=".ai/ file to update"),
+):
+    """Non-interactively update a section in a .ai/ file (for agent use)."""
+    if not os.path.exists(".ai"):
+        console.print("[red]Error: .ai/ not found. Run 'ai-orch init' first.[/red]")
+        raise typer.Exit(1)
+    filepath = os.path.join(".ai", file)
+    if update_section(filepath, section, value):
+        console.print(f"[green][OK] Updated '{section}' in {file}[/green]")
+    else:
+        console.print(f"[red]Error: Section '{section}' not found in {filepath}[/red]")
+        raise typer.Exit(1)
+
 
 if __name__ == "__main__":
     app()

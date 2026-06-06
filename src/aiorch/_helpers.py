@@ -90,6 +90,32 @@ def parse_lint_rules(wheels_path: str) -> list:
     return rules
 
 
+def update_section(filepath: str, section: str, value: str) -> bool:
+    """Replace content under a Markdown heading. Returns True if section found."""
+    if not os.path.exists(filepath):
+        return False
+    with open(filepath, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+    heading_idx = -1
+    for i, line in enumerate(lines):
+        stripped = line.strip().lstrip("#").strip().lower()
+        if stripped == section.lower() or stripped.startswith(section.lower()):
+            heading_idx = i
+            break
+    if heading_idx == -1:
+        return False
+    end_idx = len(lines)
+    for j in range(heading_idx + 1, len(lines)):
+        if re.match(r"^#{1,4}\s", lines[j]) or lines[j].strip() == "---":
+            end_idx = j
+            break
+    new_value = value.replace("\\n", "\n")
+    new_lines = lines[:heading_idx + 1] + ["\n", new_value + "\n", "\n"] + lines[end_idx:]
+    with open(filepath, "w", encoding="utf-8") as f:
+        f.writelines(new_lines)
+    return True
+
+
 def check_staged_lint(staged_files: list, rules: list) -> list:
     """Check staged file content against lint rules. Returns list of violation dicts."""
     violations = []

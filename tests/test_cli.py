@@ -279,3 +279,37 @@ def test_check_passes_with_no_lint_rules(tmp_path):
     subprocess.run(["git", "add", "script.py", ".ai/CONTEXT.md"], check=True)
     result = runner.invoke(app, ["check"])
     assert result.exit_code == 0
+
+
+def test_update_replaces_section(tmp_path):
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    result = runner.invoke(app, ["update", "--section", "Current State", "--value", "- new entry"])
+    assert result.exit_code == 0
+    with open(".ai/CONTEXT.md", "r", encoding="utf-8") as f:
+        content = f.read()
+    assert "- new entry" in content
+
+
+def test_update_multiline_value(tmp_path):
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    result = runner.invoke(app, ["update", "--section", "Current State", "--value", "- line1\\n- line2"])
+    assert result.exit_code == 0
+    with open(".ai/CONTEXT.md", "r", encoding="utf-8") as f:
+        content = f.read()
+    assert "- line1" in content
+    assert "- line2" in content
+
+
+def test_update_missing_section(tmp_path):
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    result = runner.invoke(app, ["update", "--section", "Nonexistent Section", "--value", "x"])
+    assert result.exit_code == 1
+
+
+def test_update_no_ai_folder(tmp_path):
+    os.chdir(tmp_path)
+    result = runner.invoke(app, ["update", "--section", "Most recently changed", "--value", "x"])
+    assert result.exit_code == 1

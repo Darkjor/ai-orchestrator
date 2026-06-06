@@ -19,8 +19,9 @@ All 19 tests pass. No active alerts.
 
 ## Most recently changed
 
-- `pyproject.toml` — Added `[tool.setuptools.package-data]` so templates ship with PyPI package
-- `src/aiorch/_helpers.py` — Fixed Windows path separator in `git show`; fixed `_next_alert_id` to count resolved alerts
+- `src/aiorch/main.py` — Added `ai-orch update` command (non-interactive section replacement)
+- `src/aiorch/_helpers.py` — Added `update_section()` helper with prefix-matching for headings
+- `tests/test_cli.py` — 4 new tests for update command (23 total)
 
 ---
 
