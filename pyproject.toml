@@ -24,6 +24,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0.0"]
+observability = ["supabase>=2.0.0"]
 
 [project.scripts]
 ai-orch = "aiorch.main:app"

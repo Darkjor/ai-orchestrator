@@ -5,6 +5,7 @@ import datetime
 from typer.testing import CliRunner
 from aiorch.main import app
 from aiorch._helpers import parse_lint_rules
+from unittest.mock import patch, MagicMock
 
 runner = CliRunner()
 
@@ -772,3 +773,243 @@ def test_handoff_with_alert_and_decision(tmp_path):
         decisions = f.read()
     assert "DEC-001" in decisions
     assert "Use JWT tokens" in decisions
+
+
+def test_export_stdout(tmp_path):
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    result = runner.invoke(app, ["export"])
+    assert result.exit_code == 0
+    assert "## CONTEXT.md" in result.output
+    assert "## ALERTS.md" in result.output
+    assert "---" in result.output
+
+
+def test_export_to_file(tmp_path):
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    out_path = str(tmp_path / "bundle.md")
+    result = runner.invoke(app, ["export", "--out", out_path])
+    assert result.exit_code == 0
+    assert os.path.exists(out_path)
+    with open(out_path, encoding="utf-8") as f:
+        content = f.read()
+    assert "## CONTEXT.md" in content
+    assert "## ALERTS.md" in content
+
+
+def test_export_no_ai_folder(tmp_path):
+    os.chdir(tmp_path)
+    result = runner.invoke(app, ["export"])
+    assert result.exit_code == 1
+    assert "ai-orch init" in result.output
+
+
+def test_export_missing_files_skipped(tmp_path):
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    os.remove(".ai/DISCUSSIONS.md")
+    result = runner.invoke(app, ["export"])
+    assert result.exit_code == 0
+    assert "## DISCUSSIONS.md" not in result.output
+    assert "## CONTEXT.md" in result.output
+
+
+# --- analyze command ---
+
+def test_analyze_no_ai_folder(tmp_path):
+    os.chdir(tmp_path)
+    result = runner.invoke(app, ["analyze"])
+    assert result.exit_code == 1
+    assert "ai-orch init" in result.output
+
+
+def test_analyze_creates_analysis_md(tmp_path):
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    result = runner.invoke(app, ["analyze"])
+    assert result.exit_code == 0
+    assert os.path.exists(".ai/ANALYSIS.md")
+
+
+def test_analyze_status_pending(tmp_path):
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    runner.invoke(app, ["analyze"])
+    with open(".ai/ANALYSIS.md", encoding="utf-8") as f:
+        content = f.read()
+    assert "## Status" in content
+    assert "PENDING" in content
+
+
+def test_analyze_real_metrics_in_report(tmp_path):
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    runner.invoke(app, ["analyze"])
+    with open(".ai/ANALYSIS.md", encoding="utf-8") as f:
+        content = f.read()
+    assert "## Real Metrics" in content
+    assert "Open alerts P0" in content
+    assert "Pending actions" in content
+
+
+def test_analyze_self_check_in_output(tmp_path):
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    result = runner.invoke(app, ["analyze"])
+    assert result.exit_code == 0
+    assert "Self-Check" in result.output
+    assert "Datos reales" in result.output
+
+
+def test_analyze_uses_agent_role_from_config(tmp_path):
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    config_path = ".ai/config.json"
+    with open(config_path, encoding="utf-8") as f:
+        cfg = json.load(f)
+    cfg["agents"] = {"analyzer": {"role": "Eres un agente de prueba especializado."}}
+    with open(config_path, "w", encoding="utf-8") as f:
+        json.dump(cfg, f)
+    result = runner.invoke(app, ["analyze"])
+    assert result.exit_code == 0
+    assert "agente de prueba" in result.output
+
+
+# --- qa command ---
+
+def test_qa_no_ai_folder(tmp_path):
+    os.chdir(tmp_path)
+    result = runner.invoke(app, ["qa"])
+    assert result.exit_code == 1
+    assert "ai-orch init" in result.output
+
+
+def test_qa_no_analysis_md(tmp_path):
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    result = runner.invoke(app, ["qa"])
+    assert result.exit_code == 1
+    assert "ai-orch analyze" in result.output
+
+
+def test_qa_approves_consistent_analysis(tmp_path):
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    runner.invoke(app, ["analyze"])
+    result = runner.invoke(app, ["qa"])
+    assert result.exit_code == 0
+    assert "APROBADO" in result.output
+    with open(".ai/ANALYSIS.md", encoding="utf-8") as f:
+        content = f.read()
+    assert "QA_APPROVED" in content
+
+
+def test_qa_already_reviewed_exits_cleanly(tmp_path):
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    runner.invoke(app, ["analyze"])
+    runner.invoke(app, ["qa"])
+    result = runner.invoke(app, ["qa"])
+    assert result.exit_code == 0
+    assert "ya revisado" in result.output
+
+
+def test_qa_escalates_on_discrepancy_human_rejects(tmp_path):
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    runner.invoke(app, ["analyze"])
+    # Tamper: change stored P0 count so it mismatches live state
+    with open(".ai/ANALYSIS.md", encoding="utf-8") as f:
+        content = f.read()
+    content = content.replace("| Open alerts P0 | 0 |", "| Open alerts P0 | 5 |")
+    with open(".ai/ANALYSIS.md", "w", encoding="utf-8") as f:
+        f.write(content)
+    # Human says "no" to override
+    result = runner.invoke(app, ["qa"], input="n\n")
+    assert result.exit_code == 1
+    assert "ESCALADO" in result.output
+    with open(".ai/ANALYSIS.md", encoding="utf-8") as f:
+        final = f.read()
+    assert "HUMAN_REVIEWED" in final
+    # auto-heal: action should be created in PENDING.md
+    with open(".ai/PENDING.md", encoding="utf-8") as f:
+        pending = f.read()
+    assert "analyze" in pending.lower()
+
+
+def test_qa_escalates_human_approves_override(tmp_path):
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    runner.invoke(app, ["analyze"])
+    with open(".ai/ANALYSIS.md", encoding="utf-8") as f:
+        content = f.read()
+    content = content.replace("| Open alerts P0 | 0 |", "| Open alerts P0 | 5 |")
+    with open(".ai/ANALYSIS.md", "w", encoding="utf-8") as f:
+        f.write(content)
+    # Human says "yes" to override
+    result = runner.invoke(app, ["qa"], input="y\n")
+    assert result.exit_code == 0
+    assert "Override" in result.output
+    with open(".ai/ANALYSIS.md", encoding="utf-8") as f:
+        final = f.read()
+    assert "QA_APPROVED" in final
+
+
+# --- observe command ---
+
+def test_observe_not_configured(tmp_path):
+    os.chdir(tmp_path)
+    with patch("aiorch.main.get_logger") as mock_get_logger:
+        mock_logger = MagicMock()
+        mock_logger.enabled = False
+        mock_get_logger.return_value = mock_logger
+        result = runner.invoke(app, ["observe"])
+    assert result.exit_code == 0
+    assert "SUPABASE_URL" in result.output
+
+
+def test_observe_no_runs_yet(tmp_path):
+    os.chdir(tmp_path)
+    with patch("aiorch.main.get_logger") as mock_get_logger:
+        mock_logger = MagicMock()
+        mock_logger.enabled = True
+        mock_logger.get_recent_runs.return_value = []
+        mock_get_logger.return_value = mock_logger
+        result = runner.invoke(app, ["observe"])
+    assert result.exit_code == 0
+    assert "No agent runs" in result.output
+
+
+def test_observe_shows_table_with_runs(tmp_path):
+    os.chdir(tmp_path)
+    with patch("aiorch.main.get_logger") as mock_get_logger:
+        mock_logger = MagicMock()
+        mock_logger.enabled = True
+        mock_logger.get_recent_runs.return_value = [
+            {
+                "agent_id": "analyze",
+                "command": "analyze",
+                "timestamp": "2026-06-07T12:00:00",
+                "latency_ms": 500,
+                "cost_usd": 0.0,
+                "status": "ok",
+                "eval_score": None,
+            }
+        ]
+        mock_get_logger.return_value = mock_logger
+        result = runner.invoke(app, ["observe"])
+    assert result.exit_code == 0
+    assert "analyze" in result.output
+
+
+def test_observe_limit_option(tmp_path):
+    os.chdir(tmp_path)
+    with patch("aiorch.main.get_logger") as mock_get_logger:
+        mock_logger = MagicMock()
+        mock_logger.enabled = True
+        mock_logger.get_recent_runs.return_value = []
+        mock_get_logger.return_value = mock_logger
+        result = runner.invoke(app, ["observe", "--limit", "5"])
+    assert result.exit_code == 0
+    mock_logger.get_recent_runs.assert_called_once_with(limit=5)

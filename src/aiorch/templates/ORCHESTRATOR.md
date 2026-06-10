@@ -13,6 +13,10 @@
 2. Read `.ai/ALERTS.md` — what's on fire right now
 3. Read `.ai/WHEELS.md` — things we do NOT reinvent, stack, and failed experiments
 
+> **QA agents / deep analysis:** Run `ai-orch export` first to get the full context bundle
+> instead of reading CONTEXT.md alone. CONTEXT.md is the 80-line executive brief;
+> `ai-orch export` gives you every `.ai/` file consolidated.
+
 ### Minute 2 — Triage decision
 
 ```

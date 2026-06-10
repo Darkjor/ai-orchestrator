@@ -9,7 +9,10 @@
 
 | Componente | Qué es | Dónde vive | Cómo usarlo |
 |------------|--------|------------|-------------|
-| (añadir componentes del proyecto aquí) | | | |
+| Supabase | Store de observabilidad — agent runs, latencia, costo, estado | `src/aiorch/observability.py` → `SUPABASE_URL` + `SUPABASE_ANON_KEY` env vars | `from aiorch.observability import get_logger; get_logger().log_run(...)` |
+| Rich / Typer | CLI output y comandos | `src/aiorch/main.py` | `console = Console(); app = typer.Typer()` |
+| pytest | Tests — correr con `pytest` | `tests/test_cli.py` | `pytest` o `pytest tests/test_cli.py::test_name` |
+| Ruflo / claude-flow | Memory vectorial cross-session | MCP tools vía ToolSearch | `memory_store`, `memory_search` |
 
 ---
 
