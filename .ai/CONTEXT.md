@@ -1,26 +1,32 @@
 # Project Context — ai-orch (orquestador v1)
 
-**Last updated**: 2026-06-05
-**Updated by**: Claude Code
+**Last updated**: 2026-06-10
+**Updated by**: Claude Code (Fable 5)
 
 ---
 
 ## What works right now
 
-- `ai-orch init` — Creates `.ai/` folder with 7 template files
-- `ai-orch triage` — Parses alerts, checks secrets, merge conflicts, runs tests
-- `ai-orch check` — Pre-commit guard + WHEELS.md lint enforced on staged files
-- `ai-orch hook-install` — Installs git pre-commit hook
-- `ai-orch handoff` — Interactive wizard: updates `.ai/` docs and optionally commits
-
-All 19 tests pass. No active alerts.
+- All **13 commands** verified by smoke test on a clean project: `init`, `triage`,
+  `check`, `hook-install`, `handoff`, `snapshot`, `update`, `action-add`,
+  `action-resolve`, `analyze`, `qa`, `export`, `observe`
+- v0.3.0 architecture: logic split into 10 single-responsibility domain modules
+  (`alerts`, `pending`, `context`, `decisions`, `analysis`, `gitops`, `lint`,
+  `config`, `logs`, `models`) — `main.py` is presentation-only (<500 lines)
+- `aiorch._helpers` kept as frozen backward-compat re-export shim
+- Local logging: swallowed errors go to `.ai/logs/aiorch.log` (gitignored)
+- 93 tests pass. No active alerts.
 
 ---
 
 ## Most recently changed
 
-- `src/aiorch/main.py` — post-commit hook auto-runs snapshot; snapshot --quiet flag added
-- `tests/test_cli.py` — post-commit hook assertions added to hook-install test
+- Repo hygiene: removed stray 0-byte file 'int' (accidental shell redirection)
+- src/aiorch/ - domain-module split (10 new modules), TypedDict contracts, local logging
+- src/aiorch/main.py - slimmed to CLI surface; ASCII-only console output (cp1252 crash fix)
+- docs/AI_ARCHITECTURE.md - NEW master context map for AI agents (Mermaid + exact paths)
+- CLAUDE.md, README.md - rewritten for the 13-command, 12-module reality
+- tests/test_modules.py - NEW contract tests (gitops errors, logger, compat shim)
 
 ---
 
@@ -28,12 +34,14 @@ All 19 tests pass. No active alerts.
 
 | Metric | Value |
 |--------|-------|
+| Version | 0.3.0 |
 | Python version | 3.10+ |
-| Commands | 5 (init, triage, check, hook-install, handoff) |
-| Tests | 19 (all passing) |
-| Dependencies | typer>=0.9.0, rich>=13.0.0 |
+| Commands | 13 |
+| Source modules | 12 + compat shim (`src/aiorch/`) |
+| Tests | 93 (all passing) |
+| Dependencies | typer>=0.9.0, rich>=13.0.0 (supabase optional) |
 | Entry point | `ai-orch` |
-| Template files | 7 (in src/aiorch/templates/) |
+| Template files | 9 (8 copied by init; ANALYSIS.md is runtime-only) |
 
 ---
 
@@ -42,16 +50,40 @@ All 19 tests pass. No active alerts.
 - Language: Python 3.11
 - CLI framework: Typer 0.26.7
 - Terminal UI: Rich 13.x
-- Agent orchestration: Ruflo (claude-flow) MCP
-- Skills system: Superpowers 5.1.0
+- Observability (optional): Supabase (`agent_runs` table)
 - Tests: pytest
 
 ---
 
-## Next steps (Block 2)
+## Known environment gotcha
 
-- Add README.md (done in this session)
-- Complete pyproject.toml metadata for PyPI
-- Add error path tests (invalid inputs, missing `.ai/` folder)
+The editable install of `ai-orchestrator` is machine-global. On 2026-06-10 the
+`.pth` was found pointing to a DIFFERENT folder (`Escritorio/generacion/src`),
+so imports/tests silently exercised that copy. Fixed with `pip install -e .`
+from this repo. If imports behave strangely, check
+`python -c "import aiorch; print(aiorch.__file__)"` first.
+
+---
+
+## Next steps
+
+- Publish v0.3.0 (dist/ currently holds the 0.2.0 wheel)
 - Consider `ai-orch status` dashboard command
-- Ruflo memory integration: auto-store session context at handoff
+- Optional: CI markdownlint for docs
+
+---
+
+## Codebase Snapshot
+
+- `src/aiorch/alerts.py`: parse_alerts, all_alert_ids, next_alert_id, insert_alert
+- `src/aiorch/analysis.py`: parse_analysis_status, set_analysis_status, collect_project_metrics, write_analysis_report, qa_cross_check
+- `src/aiorch/config.py`: load_config
+- `src/aiorch/context.py`: update_section, update_context, generate_snapshot, inject_snapshot, bundle_context
+- `src/aiorch/decisions.py`: append_decision, count_decisions
+- `src/aiorch/gitops.py`: GitCommandError, get_staged_files, has_merge_conflicts, scan_conflict_files, find_secret_files, run_git_commit, write_git_hook
+- `src/aiorch/lint.py`: parse_lint_rules, check_staged_lint
+- `src/aiorch/logs.py`: get_local_logger
+- `src/aiorch/main.py`: init, _print_model_recommendations, _run_configured_tests, triage, check, hook_install, handoff, snapshot, update, action_add, action_resolve, analyze, qa, export, observe
+- `src/aiorch/models.py`: Alert, AlertDraft, PendingAction, ActionDraft, DecisionDraft, LintRule, LintViolation, ProjectMetrics
+- `src/aiorch/observability.py`: SupabaseLogger, get_logger
+- `src/aiorch/pending.py`: ensure_pending_file, parse_pending, next_action_id, insert_action, resolve_action

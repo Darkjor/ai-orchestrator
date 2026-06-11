@@ -8,6 +8,9 @@ dist/
 build/
 *.egg-info/
 
+# aiorch local runtime logs
+.ai/logs/
+
 # Ruflo / claude-flow runtime
 .claude-flow/
 .mcp.json

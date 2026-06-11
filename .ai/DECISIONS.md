@@ -108,3 +108,12 @@
 **Rationale**: Architecture-only audit; implementation deferred to owning tasks.
 **Consequences**: §3.1 (triage full-repo read) and §2 (lint recompile) are the only changes that matter at 10k-line scale; the rest are micro-optimizations.
 **Revisit when**: `main.py` exceeds 500 lines or triage latency becomes user-visible on a large repo.
+
+## [DEC-006] v0.3.0 — domain-module split for agentic maintainability
+**Date**: 2026-06-10
+**Status**: Active
+**Context**: All business logic lived in a 540-line _helpers.py and a 625-line main.py; dicts crossed modules without declared shapes; ~8 `except Exception: pass` blocks hid failures from autonomous agents.
+**Decision**: Split logic into 10 single-responsibility modules (alerts, pending, context, decisions, analysis, gitops, lint, config, logs, models); main.py is presentation-only; _helpers.py frozen as re-export shim; TypedDicts in models.py are mandatory for cross-module dicts; swallowed errors must be logged via logs.get_local_logger().
+**Rationale**: Small, isolated modules with typed contracts reduce LLM hallucination surface; a local log trail lets agents self-correct; the shim keeps every pre-v0.3 import path working (tests prove it).
+**Consequences**: New code imports domain modules directly; console output must stay ASCII ([OK]/[WARN]/[ERROR]) after the cp1252 crash found in smoke testing.
+**Revisit when**: a module approaches 500 lines or a second CLI surface (API/MCP) is added.

@@ -1,6 +1,8 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) — and any other AI agent —
+when working with code in this repository. For the full module map and data contracts,
+read [docs/AI_ARCHITECTURE.md](docs/AI_ARCHITECTURE.md) first.
 
 ## Rules
 
@@ -13,6 +15,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - NEVER add a `Co-Authored-By` trailer to commits
 - Keep files under 500 lines
 - Validate input at system boundaries
+- Declare any dict that crosses a module boundary as a TypedDict in `src/aiorch/models.py`
+- Log swallowed errors via `aiorch.logs.get_local_logger()` — never `except: pass` silently
+- Keep the `[OK]` / `[WARN]` / `[ERROR]` output prefixes — agents and tests parse them
+- Never add logic to `src/aiorch/_helpers.py` — it is a re-export shim only
 
 ## Commands
 
@@ -20,51 +26,64 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Install for local development
 pip install -e .
 
-# Run all tests
+# Run all tests / a single test
 pytest
-
-# Run a single test function
 pytest tests/test_cli.py::test_init_creates_ai_folder
 
-# Run the CLI directly after install
-ai-orch --help
-ai-orch init
-ai-orch triage
-ai-orch check
-ai-orch hook-install
-ai-orch handoff
+# CLI (all 13 commands)
+ai-orch init              # create .ai/ from templates (8 files)
+ai-orch triage            # alerts + pending + model routing + conflict/secret scan + tests
+ai-orch check             # pre-commit guard: code staged without .ai/ update → exit 1
+ai-orch hook-install      # writes .git/hooks/pre-commit and post-commit
+ai-orch handoff           # interactive session-handoff wizard (--snapshot to embed symbols)
+ai-orch snapshot          # AST symbol snapshot → CONTEXT.md (--src DIR, --quiet)
+ai-orch update            # non-interactive section replace: -s SECTION -v VALUE [-f FILE]
+ai-orch action-add        # add manual action to PENDING.md (--type db|infra|other, --sql, --steps)
+ai-orch action-resolve    # move a PENDING.md action to ## DONE by ID
+ai-orch analyze           # write verifiable metrics report to .ai/ANALYSIS.md
+ai-orch qa                # cross-check ANALYSIS.md vs live state; escalate on mismatch
+ai-orch export            # bundle all .ai/ files to stdout or --out FILE
+ai-orch observe           # show Supabase run metrics (needs SUPABASE_URL/_ANON_KEY)
 ```
 
-There is no build step — this is a pure Python project with `setuptools`.
+There is no build step — pure Python with `setuptools`.
 
 ## Architecture
 
-**Entry point**: `src/aiorch/main.py` — single file containing all CLI commands, registered as `ai-orch` via `pyproject.toml` `[project.scripts]`.
+**Entry point**: [src/aiorch/main.py](src/aiorch/main.py) — Typer app (`ai-orch` via
+`[project.scripts]`). Presentation only: prompts, Rich rendering, exit codes. Must stay
+under 500 lines — put logic in the domain modules.
 
-**CLI framework**: Typer (`app = typer.Typer()`). Each command is decorated with `@app.command()`. Output is rendered with Rich (`console = Console()`).
+**Domain modules** (single responsibility, all in `src/aiorch/`):
 
-**Templates**: `src/aiorch/templates/` contains the 7 files that `init` copies into a project's `.ai/` folder:
+| Module | Owns |
+| --- | --- |
+| `models.py` | TypedDict contracts (`Alert`, `PendingAction`, `LintRule`, `ProjectMetrics`, ...) |
+| `alerts.py` | ALERTS.md parsing/insertion; IDs never reused after resolution |
+| `pending.py` | PENDING.md actions lifecycle (insert → resolve → ## DONE) |
+| `context.py` | CONTEXT.md section editing, AST snapshot, export bundle |
+| `decisions.py` | DECISIONS.md append-only decision log |
+| `analysis.py` | analyze→qa anti-hallucination pipeline (status: PENDING→QA_APPROVED/ESCALATED) |
+| `gitops.py` | every git subprocess + hook scripts; queries raise `GitCommandError` |
+| `lint.py` | WHEELS.md `[LINT-XXX]` rules checked against the git index at pre-commit |
+| `config.py` | forgiving `.ai/config.json` loader (corrupt → `{}` + warning) |
+| `logs.py` | local logger: WARNING+ → stderr, DEBUG+ → `.ai/logs/aiorch.log` |
+| `observability.py` | optional Supabase `agent_runs` logger; never raises, off without env vars |
+| `_helpers.py` | backward-compat re-export shim (frozen public API, incl. `_`-prefixed aliases) |
 
-- `ORCHESTRATOR.md` — arrival protocol for AI agents
-- `CONTEXT.md` — current project state (updated by `handoff`)
-- `ALERTS.md` — P0/P1/P2 issue tracker (parsed by `parse_alerts()`)
-- `DECISIONS.md` — architecture decision log (appended by `handoff`)
-- `DISCUSSIONS.md` — async agent threads
-- `WHEELS.md` — failed approaches / do-not-reinvent list
-- `config.json` — project metadata + Claude model recommendations per task type
+**Templates**: `src/aiorch/templates/` — 9 files; `init` copies 8 of them into `.ai/`
+(`ANALYSIS.md` is runtime-only, generated by `analyze`).
 
-**Command responsibilities**:
+**Tests**: `tests/` uses `typer.testing.CliRunner` with `tmp_path` + `os.chdir()`, real
+git subprocesses, no filesystem mocking. The suite is the contract: keep it green, and
+never break `aiorch.main.app`, `aiorch._helpers.*`, or `aiorch.main.get_logger`.
 
-- `init` — copies all templates into `.ai/`; is a no-op if `.ai/` already exists
-- `triage` — reads `.ai/ALERTS.md` via `parse_alerts()`, reads `.ai/config.json` for model recommendations, scans for merge conflicts, checks for secret files, optionally runs `test_command` from config
-- `check` — git pre-commit guard; exits 1 if codebase files are staged but `.ai/` was not touched
-- `hook-install` — writes `.git/hooks/pre-commit` that calls `ai-orch check`
-- `handoff` — interactive wizard that updates `CONTEXT.md` (regex-replaces "Current State" date and injects bullets), appends to `ALERTS.md` and `DECISIONS.md`, and optionally `git add . && git commit`
+**Model routing** (template `config.json`, surfaced by `triage`/`handoff`):
 
-**Tests**: `tests/test_cli.py` uses `typer.testing.CliRunner` with `tmp_path` fixtures. Tests `os.chdir()` into a temp directory and invoke commands directly through the runner. No mocking — tests call real git subprocess commands where needed.
-
-**Model routing** (defined in `config.json` template):
-
-- Architecture / code review → `claude-opus-4-8` (with extended thinking)
+- Architecture / code review → `claude-opus-4-8` (extended thinking)
 - Feature / bugfix / refactor / tests → `claude-sonnet-4-6`
 - Docs → `claude-haiku-4-5-20251001`
+
+**Self-hosting note**: this repo uses its own tooling. The pre-commit hook runs
+`ai-orch check` — every commit that touches code must also update `.ai/`
+(run `ai-orch handoff` or edit `.ai/CONTEXT.md`). Do not bypass it with `--no-verify`.

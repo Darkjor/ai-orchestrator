@@ -7,7 +7,7 @@
 
 | Key | Value |
 |-----|-------|
-| Run date | 2026-06-07 |
+| Run date | 2026-06-10 |
 | Agent | analyzer |
 | Agent role | Eres un analizador de proyecto especializado. |
 | Status | PENDING |
@@ -16,13 +16,13 @@
 
 | Metric | Value | Source |
 |--------|-------|--------|
-| Tests collected | 69 | pytest --collect-only |
+| Tests collected | 93 | pytest --collect-only |
 | Open alerts P0 | 0 | ALERTS.md |
 | Open alerts P1 | 0 | ALERTS.md |
 | Open alerts P2 | 0 | ALERTS.md |
 | Pending actions | 0 | PENDING.md |
-| Decisions recorded | 5 | DECISIONS.md |
-| Git modified files | 6 | git diff |
+| Decisions recorded | 6 | DECISIONS.md |
+| Git modified files | 8 | git diff |
 
 ## Findings
 
@@ -39,7 +39,7 @@
 ## QA Review
 
 **Resultado**: APROBADO
-**Fecha**: 2026-06-07
+**Fecha**: 2026-06-10
 **Notas**: Sin discrepancias detectadas.
 
 ## Status

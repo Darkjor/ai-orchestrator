@@ -40,17 +40,27 @@ ai-orch handoff
 ## Commands
 
 | Command | What it does |
-|---------|-------------|
-| `ai-orch init` | Creates `.ai/` folder with 7 context files |
-| `ai-orch triage` | Shows active alerts, model recommendations, runs tests |
-| `ai-orch check` | Pre-commit guard: fails if code changed but `.ai/` wasn't updated |
-| `ai-orch hook-install` | Installs `ai-orch check` as a git pre-commit hook |
-| `ai-orch handoff` | Interactive wizard to update `.ai/` docs and commit |
+| ------- | ------------ |
+| `ai-orch init` | Creates `.ai/` folder with 8 context files |
+| `ai-orch triage` | Shows active alerts, pending actions, model recommendations; scans for conflicts/secrets; runs tests |
+| `ai-orch check` | Pre-commit guard: fails if code changed but `.ai/` wasn't updated, or WHEELS.md lint rules are violated |
+| `ai-orch hook-install` | Installs the pre-commit guard and a post-commit snapshot refresher |
+| `ai-orch handoff` | Interactive wizard to update `.ai/` docs and commit (`--snapshot` embeds a symbol map) |
+| `ai-orch snapshot` | Injects an AST symbol snapshot of `src/` into `CONTEXT.md` |
+| `ai-orch update` | Non-interactive section replace in any `.ai/` file (for agents) |
+| `ai-orch action-add` | Records a manual action (DB/infra/other) in `PENDING.md` |
+| `ai-orch action-resolve` | Marks a pending action as done (moves it to `## DONE`) |
+| `ai-orch analyze` | Writes a verifiable metrics report to `.ai/ANALYSIS.md` |
+| `ai-orch qa` | Cross-checks the analysis against live state; escalates discrepancies |
+| `ai-orch export` | Bundles all `.ai/` files into one Markdown document (stdout or `--out`) |
+| `ai-orch observe` | Shows recent agent-run metrics from the optional Supabase store |
+
+Architecture and data contracts for contributors (human or AI): [docs/AI_ARCHITECTURE.md](docs/AI_ARCHITECTURE.md).
 
 ## The `.ai/` folder
 
 | File | Purpose |
-|------|---------|
+| ---- | ------- |
 | `CONTEXT.md` | Current project state — what works, what's broken, what changed |
 | `ALERTS.md` | P0/P1/P2 issues — read before writing any code |
 | `DECISIONS.md` | Architecture decisions log |
@@ -151,10 +161,15 @@ Example `.ai/config.json` with task-specific models:
 
 ## API usage
 
-Import `ai-orch` helpers into your own Python scripts:
+Import `ai-orch` helpers into your own Python scripts. Since v0.3 the logic lives in
+single-responsibility domain modules (`aiorch.alerts`, `aiorch.pending`,
+`aiorch.context`, ...); `aiorch._helpers` remains as a stable re-export shim, so both
+import styles work:
 
 ```python
-from aiorch._helpers import parse_alerts, parse_pending, update_section
+from aiorch.alerts import parse_alerts
+from aiorch.pending import parse_pending
+from aiorch.context import update_section
 
 # Check for active alerts in a project
 alerts = parse_alerts(".ai/ALERTS.md")
