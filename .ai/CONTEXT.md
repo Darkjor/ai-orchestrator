@@ -21,12 +21,10 @@
 
 ## Most recently changed
 
-- Repo hygiene: removed stray 0-byte file 'int' (accidental shell redirection)
-- src/aiorch/ - domain-module split (10 new modules), TypedDict contracts, local logging
-- src/aiorch/main.py - slimmed to CLI surface; ASCII-only console output (cp1252 crash fix)
-- docs/AI_ARCHITECTURE.md - NEW master context map for AI agents (Mermaid + exact paths)
-- CLAUDE.md, README.md - rewritten for the 13-command, 12-module reality
-- tests/test_modules.py - NEW contract tests (gitops errors, logger, compat shim)
+- .github/workflows/ci.yml - CI now runs on push to master (was develop-only)
+- README.md - Install section documents the real path: pip install git+...@v0.3.0 and update via pip install -U git+...@master
+- src/aiorch/ - domain-module split (10 modules), TypedDict contracts, local logging
+- docs/AI_ARCHITECTURE.md - master context map for AI agents
 
 ---
 

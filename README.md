@@ -8,15 +8,21 @@ When multiple AI agents work on the same project — or a single agent returns a
 
 ## Install
 
+From GitHub (recommended until the PyPI release):
+
 ```bash
-pip install ai-orchestrator
+# Install the v0.3.0 release
+pip install "git+https://github.com/Darkjor/ai-orchestrator.git@v0.3.0"
+
+# Update an existing install (any machine) to the latest master
+pip install -U "git+https://github.com/Darkjor/ai-orchestrator.git@master"
 ```
 
-Or from source:
+Or from a local clone:
 
 ```bash
-git clone <repo>
-cd orquestador-v1
+git clone https://github.com/Darkjor/ai-orchestrator.git
+cd ai-orchestrator
 pip install -e .
 ```
 
