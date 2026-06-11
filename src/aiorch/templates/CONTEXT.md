@@ -3,6 +3,7 @@
 > This file is updated by AI agents after significant work.
 > It is the fastest way to get up to speed (read before anything else).
 > Keep it under 80 lines. Remove stale info aggressively.
+> Para contexto completo (QA agents, análisis): `ai-orch export`
 
 ## .ai/ Folder Index
 

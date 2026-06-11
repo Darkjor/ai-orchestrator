@@ -1,6 +1,6 @@
 [project]
 name = "ai-orchestrator"
-version = "0.1.0"
+version = "0.3.0"
 description = "A global, tech-agnostic AI Orchestrator CLI framework"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -22,8 +22,15 @@ dependencies = [
     "rich>=13.0.0"
 ]
 
+[project.optional-dependencies]
+dev = ["pytest>=8.0.0"]
+observability = ["supabase>=2.0.0"]
+
 [project.scripts]
 ai-orch = "aiorch.main:app"
+
+[tool.setuptools.package-data]
+aiorch = ["templates/*.md", "templates/*.json"]
 
 [build-system]
 requires = ["setuptools>=61.0.0"]

@@ -9,7 +9,10 @@
 
 | Componente | Qué es | Dónde vive | Cómo usarlo |
 |------------|--------|------------|-------------|
-| (añadir componentes del proyecto aquí) | | | |
+| Supabase | Store de observabilidad — agent runs, latencia, costo, estado | `src/aiorch/observability.py` → `SUPABASE_URL` + `SUPABASE_ANON_KEY` env vars | `from aiorch.observability import get_logger; get_logger().log_run(...)` |
+| Rich / Typer | CLI output y comandos | `src/aiorch/main.py` | `console = Console(); app = typer.Typer()` |
+| pytest | Tests — correr con `pytest` | `tests/test_cli.py` | `pytest` o `pytest tests/test_cli.py::test_name` |
+| Ruflo / claude-flow | Memory vectorial cross-session | MCP tools vía ToolSearch | `memory_store`, `memory_search` |
 
 ---
 
@@ -46,8 +49,28 @@
 
 ---
 
+## 4. Lint Rules (enforced at pre-commit)
+
+Rules here are checked automatically by `ai-orch check` against staged files.
+Add a rule when a pattern from ALUC/FAIL needs to be enforced in code, not just documented.
+
+### Rule format
+
+```
+### [LINT-001] Short description
+**Pattern**: `regex_pattern`
+**Files**: *.ext, *.ext2
+**Message**: Why this is blocked and what to do instead.
+```
+
+No rules yet — add one when a WHEELS pattern needs hard enforcement.
+
+---
+
 ## Cómo actualizar este archivo
 
 **Cuando algo falla:** añadir `[FAIL-XXX]` con causa raíz + alternativa adoptada.
 
 **Cuando un agente repite un error:** añadir `[ALUC-XXX]` con instrucción directa.
+
+**Cuando un patrón de ALUC necesita enforcement duro:** añadir `[LINT-XXX]` en la sección 4.
