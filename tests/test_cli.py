@@ -12,7 +12,19 @@ def test_init_creates_ai_folder(tmp_path):
     result = runner.invoke(app, ["init"])
     assert result.exit_code == 0
     assert os.path.exists(".ai")
-    assert os.path.exists(".ai/ORCHESTRATOR.md")
+    assert os.path.exists("AGENTS.md")
+    assert not os.path.exists(".ai/AGENTS.md")
+
+
+def test_init_does_not_overwrite_existing_agents_md(tmp_path):
+    os.chdir(tmp_path)
+    with open("AGENTS.md", "w", encoding="utf-8") as f:
+        f.write("custom existing agents file")
+    result = runner.invoke(app, ["init"])
+    assert result.exit_code == 0
+    with open("AGENTS.md", "r", encoding="utf-8") as f:
+        content = f.read()
+    assert content == "custom existing agents file"
 
 def test_triage_command(tmp_path):
     os.chdir(tmp_path)
@@ -70,6 +82,31 @@ def test_check_command(tmp_path):
     
     result = runner.invoke(app, ["check"])
     assert result.exit_code == 0
+
+def test_check_accepts_agents_md_update(tmp_path):
+    os.chdir(tmp_path)
+    subprocess.run(["git", "init"], check=True, capture_output=True)
+    runner.invoke(app, ["init"])
+
+    subprocess.run(["git", "config", "user.name", "Test User"], check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], check=True)
+
+    with open("init_file.txt", "w") as f:
+        f.write("initial file")
+    subprocess.run(["git", "add", "init_file.txt"], check=True)
+    subprocess.run(["git", "commit", "-m", "initial commit"], check=True)
+
+    with open("source.py", "w") as f:
+        f.write("print('hello')")
+    subprocess.run(["git", "add", "source.py"], check=True)
+
+    with open("AGENTS.md", "a") as f:
+        f.write("\nUpdated agent instructions")
+    subprocess.run(["git", "add", "AGENTS.md"], check=True)
+
+    result = runner.invoke(app, ["check"])
+    assert result.exit_code == 0
+
 
 def test_hook_install_command(tmp_path):
     os.chdir(tmp_path)

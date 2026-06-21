@@ -50,24 +50,30 @@ def parse_alerts(alerts_path: str):
 
 @app.command()
 def init():
-    """Initialize .ai/ orchestrator folder in current directory."""
+    """Initialize .ai/ orchestrator folder and AGENTS.md in current directory."""
     if os.path.exists(".ai"):
         console.print("[yellow]Warning: .ai directory already exists.[/yellow]")
         raise typer.Exit()
-    
+
     os.makedirs(".ai", exist_ok=True)
     template_dir = os.path.join(os.path.dirname(__file__), "templates")
-    
+
     if not os.path.exists(template_dir):
         console.print(f"[red]Error: Templates directory {template_dir} not found.[/red]")
         raise typer.Exit(1)
-        
+
     for filename in os.listdir(template_dir):
         src = os.path.join(template_dir, filename)
-        dst = os.path.join(".ai", filename)
+        if filename == "AGENTS.md":
+            dst = "AGENTS.md"
+            if os.path.exists(dst):
+                console.print("[yellow]Warning: AGENTS.md already exists at project root, leaving it untouched.[/yellow]")
+                continue
+        else:
+            dst = os.path.join(".ai", filename)
         shutil.copy(src, dst)
-    
-    console.print("[green]Successfully initialized .ai/ orchestrator folder![/green]")
+
+    console.print("[green]Successfully initialized .ai/ orchestrator folder and AGENTS.md![/green]")
 
 @app.command()
 def triage():
@@ -207,7 +213,7 @@ def check():
     ai_changed = False
     
     for f in staged_files:
-        if f.startswith(".ai/"):
+        if f.startswith(".ai/") or f == "AGENTS.md":
             ai_changed = True
         elif not any(f.startswith(prefix) for prefix in [".git", "docs/"]):
             if f not in [".gitignore", "pyproject.toml"]:

@@ -43,9 +43,9 @@ There is no build step — this is a pure Python project with `setuptools`.
 
 **CLI framework**: Typer (`app = typer.Typer()`). Each command is decorated with `@app.command()`. Output is rendered with Rich (`console = Console()`).
 
-**Templates**: `src/aiorch/templates/` contains the 7 files that `init` copies into a project's `.ai/` folder:
+**Templates**: `src/aiorch/templates/` contains the 7 files `init` distributes. `AGENTS.md` goes to the project root (the open AGENTS.md standard agents already look for by default); the rest go into `.ai/`:
 
-- `ORCHESTRATOR.md` — arrival protocol for AI agents
+- `AGENTS.md` — agent instructions and boundaries; copied to the project root, not `.ai/`
 - `CONTEXT.md` — current project state (updated by `handoff`)
 - `ALERTS.md` — P0/P1/P2 issue tracker (parsed by `parse_alerts()`)
 - `DECISIONS.md` — architecture decision log (appended by `handoff`)
@@ -55,9 +55,9 @@ There is no build step — this is a pure Python project with `setuptools`.
 
 **Command responsibilities**:
 
-- `init` — copies all templates into `.ai/`; is a no-op if `.ai/` already exists
+- `init` — copies `AGENTS.md` to the project root (skipped, with a warning, if one already exists) and the remaining templates into `.ai/`; is a no-op if `.ai/` already exists
 - `triage` — reads `.ai/ALERTS.md` via `parse_alerts()`, reads `.ai/config.json` for model recommendations, scans for merge conflicts, checks for secret files, optionally runs `test_command` from config
-- `check` — git pre-commit guard; exits 1 if codebase files are staged but `.ai/` was not touched
+- `check` — git pre-commit guard; exits 1 if codebase files are staged but neither `.ai/` nor `AGENTS.md` was touched
 - `hook-install` — writes `.git/hooks/pre-commit` that calls `ai-orch check`
 - `handoff` — interactive wizard that updates `CONTEXT.md` (regex-replaces "Current State" date and injects bullets), appends to `ALERTS.md` and `DECISIONS.md`, and optionally `git add . && git commit`
 

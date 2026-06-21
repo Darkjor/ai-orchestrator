@@ -41,13 +41,19 @@ ai-orch handoff
 
 | Command | What it does |
 |---------|-------------|
-| `ai-orch init` | Creates `.ai/` folder with 7 context files |
+| `ai-orch init` | Creates `AGENTS.md` at the project root + `.ai/` folder with 6 context files |
 | `ai-orch triage` | Shows active alerts, model recommendations, runs tests |
-| `ai-orch check` | Pre-commit guard: fails if code changed but `.ai/` wasn't updated |
+| `ai-orch check` | Pre-commit guard: fails if code changed but `AGENTS.md`/`.ai/` weren't updated |
 | `ai-orch hook-install` | Installs `ai-orch check` as a git pre-commit hook |
 | `ai-orch handoff` | Interactive wizard to update `.ai/` docs and commit |
 
+## Agent instructions
+
+`ai-orch init` writes `AGENTS.md` to your project root — the open format already adopted by 25+ AI coding tools (Codex, Cursor, Copilot, Windsurf, Claude Code, and more), governed by the Linux Foundation's Agentic AI Foundation. No proprietary file for agents to learn; if `AGENTS.md` already exists, `init` leaves it untouched.
+
 ## The `.ai/` folder
+
+What `AGENTS.md` and architecture-decision tooling don't already give you:
 
 | File | Purpose |
 |------|---------|
@@ -56,12 +62,11 @@ ai-orch handoff
 | `DECISIONS.md` | Architecture decisions log |
 | `DISCUSSIONS.md` | Async threads between agents |
 | `WHEELS.md` | Libraries tried and failed — don't reinvent |
-| `ORCHESTRATOR.md` | Arrival protocol — every agent reads this first |
 | `config.json` | Project metadata and model recommendations |
 
 ## Compatible with
 
-Claude Code, Gemini CLI, Cursor, GitHub Copilot, GPT-4, and any AI tool that can read files.
+Any AI tool that reads `AGENTS.md` (Claude Code, Codex, Cursor, GitHub Copilot, Windsurf) plus any tool that can read files for the `.ai/` docs (Gemini CLI, GPT-4, etc).
 
 ## Requirements
 

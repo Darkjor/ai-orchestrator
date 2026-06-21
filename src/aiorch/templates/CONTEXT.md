@@ -6,9 +6,10 @@
 
 ## .ai/ Folder Index
 
+> Agent instructions live in `AGENTS.md` at the project root — read that first.
+
 | File | Purpose |
 |------|---------|
-| ORCHESTRATOR.md | CEO arrival protocol — read this FIRST |
 | ALERTS.md | Active fires P0/P1/P2 — check before any feature work |
 | DECISIONS.md | Why things are built the way they are |
 | WHEELS.md | Catalog of tools in use + failed experiments |
@@ -56,7 +57,7 @@
 
 **For documentation**: claude-haiku-4-5-20251001 (lightweight)
 
-See `.ai/config.json` and ORCHESTRATOR.md for detailed model selection guide.
+See `.ai/config.json` and the project's `AGENTS.md` for detailed model selection guide.
 
 ---
 

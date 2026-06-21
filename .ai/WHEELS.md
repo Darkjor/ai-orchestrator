@@ -30,6 +30,13 @@
 **Contexto**: Implementado en `src/aiorch/main.py:139`, descubierto en sesión 2026-06-05.
 **Alternativa adoptada**: `re.search(r'^<{7}', content, re.MULTILINE)` — los marcadores reales de conflicto siempre están al inicio de línea (DEC-004).
 
+### [FAIL-002] Formato propio `ORCHESTRATOR.md` para instrucciones de agentes
+
+**Intentado**: Crear `.ai/ORCHESTRATOR.md` con un protocolo de llegada propio ("CEO Mode") para que cualquier agente lo leyera primero.
+**Falló porque**: Duplicaba un estándar abierto ya existente — **AGENTS.md**, originado por OpenAI en agosto 2025 para Codex CLI, ahora gobernado por la Linux Foundation (Agentic AI Foundation) y adoptado por 25+ herramientas (Codex, Cursor, GitHub Copilot, Windsurf, Claude Code). Ningún agente externo busca `.ai/ORCHESTRATOR.md` por defecto — solo funcionaba si alguien lo pegaba manualmente como contexto. Lo mismo aplica a `DECISIONS.md` frente a herramientas de ADR ya maduras (`adr-tools`, `MADR`), aunque ahí se decidió mantenerlo por ser más liviano y estar integrado al resto del flujo.
+**Contexto**: Detectado en sesión 2026-06-21 al comparar el proyecto con Graphify y analizar qué partes del problema ya estaban resueltas por el ecosistema.
+**Alternativa adoptada**: `ai-orch init` ahora genera `AGENTS.md` en la raíz del proyecto en vez de `.ai/ORCHESTRATOR.md` (DEC-005). `.ai/` se queda solo con lo que AGENTS.md y las ADR tools no cubren: alertas P0/P1/P2, wheels, discusiones async y el enforcement del pre-commit hook (`check`).
+
 ---
 
 ## 3. Alucinaciones Documentadas (patrones incorrectos que los agentes repiten)
