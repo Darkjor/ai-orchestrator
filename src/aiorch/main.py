@@ -144,7 +144,14 @@ def init():
         with open(config_path, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=2)
             f.write("\n")
-        console.print(f"[cyan]Detected project: {detected['project_name']} ({detected['project_stack']})[/cyan]")
+        if detected["project_stack"] == "Unknown":
+            console.print(
+                "[yellow]Could not detect project stack automatically. "
+                "Please edit .ai/config.json and fill in project_name, project_stack, "
+                "run_command and test_command by hand.[/yellow]"
+            )
+        else:
+            console.print(f"[cyan]Detected project: {detected['project_name']} ({detected['project_stack']})[/cyan]")
     except Exception as e:
         console.print(f"[yellow]Warning: Could not auto-fill .ai/config.json. Reason: {e}[/yellow]")
 

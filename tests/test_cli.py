@@ -64,6 +64,7 @@ def test_init_falls_back_to_directory_name(tmp_path):
     os.chdir(tmp_path)
     result = runner.invoke(app, ["init"])
     assert result.exit_code == 0
+    assert "Could not detect project stack" in result.output
 
     with open(".ai/config.json", "r", encoding="utf-8") as f:
         config = json.load(f)

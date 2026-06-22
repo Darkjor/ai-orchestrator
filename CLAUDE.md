@@ -61,7 +61,7 @@ There is no build step — this is a pure Python project with `setuptools`.
 - `hook-install` — writes `.git/hooks/pre-commit` that calls `ai-orch check`
 - `handoff` — interactive wizard that updates `CONTEXT.md` (regex-replaces "Current State" date and injects bullets), appends to `ALERTS.md` and `DECISIONS.md`, and optionally `git add . && git commit`
 
-**Project context detection**: `detect_project_context(root=".")` in `main.py` inspects the host project's manifest files to fill in real values instead of placeholders — `pyproject.toml` (regex for `[project] name` and `[project.scripts]` entries → Python/CLI), `package.json` (`name` + `scripts.start`/`scripts.test` → Node.js), `go.mod`, `Cargo.toml`, falling back to the directory name and `"Unknown"` stack when no manifest matches. Wrapped in try/except so a malformed manifest never breaks `init`.
+**Project context detection**: `detect_project_context(root=".")` in `main.py` inspects the host project's manifest files to fill in real values instead of placeholders — `pyproject.toml` (regex for `[project] name` and `[project.scripts]` entries → Python/CLI), `package.json` (`name` + `scripts.start`/`scripts.test` → Node.js), `go.mod`, `Cargo.toml`, falling back to the directory name and `"Unknown"` stack when no manifest matches. Wrapped in try/except so a malformed manifest never breaks `init`. When the stack can't be detected, `init` prints a warning telling the user to fill in `.ai/config.json` by hand.
 
 **Tests**: `tests/test_cli.py` uses `typer.testing.CliRunner` with `tmp_path` fixtures. Tests `os.chdir()` into a temp directory and invoke commands directly through the runner. No mocking — tests call real git subprocess commands where needed.
 

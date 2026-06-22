@@ -19,8 +19,8 @@ All 19 tests pass. No active alerts.
 
 ## Most recently changed
 
-- `src/aiorch/main.py` — added `detect_project_context()`: reads `pyproject.toml`/`package.json`/`go.mod`/`Cargo.toml` (falls back to directory name) and merges the result into `.ai/config.json` on `init`; `init` also stamps today's date into `.ai/CONTEXT.md`'s "Current State" header
-- `tests/test_cli.py` — added `test_init_detects_python_project`, `test_init_detects_node_project`, `test_init_falls_back_to_directory_name` (19 tests total)
+- `src/aiorch/main.py` — added `detect_project_context()`: reads `pyproject.toml`/`package.json`/`go.mod`/`Cargo.toml` (falls back to directory name) and merges the result into `.ai/config.json` on `init`; `init` also stamps today's date into `.ai/CONTEXT.md`'s "Current State" header; when no stack is detected, `init` now warns the user to fill in `.ai/config.json` by hand
+- `tests/test_cli.py` — added `test_init_detects_python_project`, `test_init_detects_node_project`, `test_init_falls_back_to_directory_name` (asserts the new warning) (19 tests total)
 - `README.md`, `CLAUDE.md` — documented the auto-detection behavior
 
 ---
