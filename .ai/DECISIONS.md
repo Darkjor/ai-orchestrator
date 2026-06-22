@@ -49,3 +49,15 @@
 **Rationale**: Git conflict markers always appear at column 0. String literals containing `<<<<<<<` (as in this codebase) will not match.
 **Consequences**: None — stricter match is correct behavior.
 **Revisit when**: Never — this is the correct pattern.
+
+---
+
+## [DEC-005] Adopt AGENTS.md instead of a proprietary ORCHESTRATOR.md
+
+**Date**: 2026-06-21
+**Status**: Active
+**Context**: `ORCHESTRATOR.md` duplicated the job of AGENTS.md, an open format originated by OpenAI (Aug 2025) for Codex CLI and now governed by the Linux Foundation's Agentic AI Foundation, already adopted by 25+ tools (Codex, Cursor, GitHub Copilot, Windsurf, Claude Code). A bespoke arrival-protocol file is invisible to any agent that doesn't already know this project's specific convention — defeating the goal of cross-agent compatibility this project exists for.
+**Decision**: `ai-orch init` now writes `AGENTS.md` to the project root (skipped with a warning if one already exists) instead of `.ai/ORCHESTRATOR.md`. `.ai/` keeps only what AGENTS.md and ADR tooling (adr-tools, MADR) don't already cover: `ALERTS.md` (severity-tagged triage), `DECISIONS.md`, `WHEELS.md`, `DISCUSSIONS.md`, `CONTEXT.md`, `config.json`. `check` now treats edits to root `AGENTS.md` the same as edits to `.ai/`.
+**Rationale**: Conform to the standard agents already look for by default rather than competing with it. The project's genuine value is the enforcement mechanism (`check` + pre-commit hook) and the P0/P1/P2 alert/wheels system — not the instruction-file format.
+**Consequences**: Breaks compatibility with any prior install that has `.ai/ORCHESTRATOR.md` (acceptable — project is alpha, no known external users). `init`'s file-distribution logic is no longer a flat copy loop; it special-cases one filename.
+**Revisit when**: AGENTS.md stops being the dominant convention, or a successor standard emerges.
