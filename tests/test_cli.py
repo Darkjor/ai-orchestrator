@@ -26,6 +26,51 @@ def test_init_does_not_overwrite_existing_agents_md(tmp_path):
         content = f.read()
     assert content == "custom existing agents file"
 
+def test_init_detects_python_project(tmp_path):
+    os.chdir(tmp_path)
+    with open("pyproject.toml", "w", encoding="utf-8") as f:
+        f.write('[project]\nname = "my-detected-app"\n\n[project.scripts]\nmy-cli = "my_detected_app.main:app"\n')
+    os.makedirs("tests", exist_ok=True)
+
+    result = runner.invoke(app, ["init"])
+    assert result.exit_code == 0
+
+    with open(".ai/config.json", "r", encoding="utf-8") as f:
+        config = json.load(f)
+    assert config["project_name"] == "my-detected-app"
+    assert config["project_stack"] == "Python"
+    assert config["project_type"] == "CLI"
+    assert config["run_command"] == "my-cli --help"
+    assert config["test_command"] == "pytest"
+
+
+def test_init_detects_node_project(tmp_path):
+    os.chdir(tmp_path)
+    with open("package.json", "w", encoding="utf-8") as f:
+        json.dump({"name": "my-node-app", "scripts": {"start": "node index.js", "test": "jest"}}, f)
+
+    result = runner.invoke(app, ["init"])
+    assert result.exit_code == 0
+
+    with open(".ai/config.json", "r", encoding="utf-8") as f:
+        config = json.load(f)
+    assert config["project_name"] == "my-node-app"
+    assert config["project_stack"] == "Node.js"
+    assert config["run_command"] == "npm start"
+    assert config["test_command"] == "npm test"
+
+
+def test_init_falls_back_to_directory_name(tmp_path):
+    os.chdir(tmp_path)
+    result = runner.invoke(app, ["init"])
+    assert result.exit_code == 0
+
+    with open(".ai/config.json", "r", encoding="utf-8") as f:
+        config = json.load(f)
+    assert config["project_name"] == tmp_path.name
+    assert config["project_stack"] == "Unknown"
+
+
 def test_triage_command(tmp_path):
     os.chdir(tmp_path)
     runner.invoke(app, ["init"])

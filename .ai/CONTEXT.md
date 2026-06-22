@@ -1,29 +1,27 @@
 # Project Context — ai-orch (orquestador v1)
 
-**Last updated**: 2026-06-21
+**Last updated**: 2026-06-22
 **Updated by**: Claude Code
 
 ---
 
 ## What works right now
 
-- `ai-orch init` — Creates `AGENTS.md` at the project root + `.ai/` folder with 6 template files
+- `ai-orch init` — Creates `AGENTS.md` at the project root + `.ai/` folder with 6 template files, auto-detecting the host project's name/stack/type/run+test commands and writing them into `.ai/config.json`
 - `ai-orch triage` — Parses alerts, checks secrets, merge conflicts, runs tests
 - `ai-orch check` — Pre-commit guard: blocks commit if code changed but neither `AGENTS.md` nor `.ai/` was updated
 - `ai-orch hook-install` — Installs git pre-commit hook
 - `ai-orch handoff` — Interactive wizard: updates `.ai/` docs and optionally commits
 
-All 16 tests pass. No active alerts.
+All 19 tests pass. No active alerts.
 
 ---
 
 ## Most recently changed
 
-- `src/aiorch/main.py` — `init` now writes `AGENTS.md` to the project root instead of `.ai/ORCHESTRATOR.md` (skipped with a warning if one already exists); `check` now treats edits to root `AGENTS.md` as a valid context update (DEC-005)
-- `src/aiorch/templates/ORCHESTRATOR.md` — removed; replaced by `src/aiorch/templates/AGENTS.md`
-- `.ai/ORCHESTRATOR.md` (this project's own instance) — removed; replaced by root `AGENTS.md`
-- `tests/test_cli.py` — added tests for AGENTS.md placement, no-overwrite behavior, and `check` accepting AGENTS.md updates (16 tests total)
-- `README.md`, `CLAUDE.md` — updated to describe the AGENTS.md-based architecture
+- `src/aiorch/main.py` — added `detect_project_context()`: reads `pyproject.toml`/`package.json`/`go.mod`/`Cargo.toml` (falls back to directory name) and merges the result into `.ai/config.json` on `init`; `init` also stamps today's date into `.ai/CONTEXT.md`'s "Current State" header
+- `tests/test_cli.py` — added `test_init_detects_python_project`, `test_init_detects_node_project`, `test_init_falls_back_to_directory_name` (19 tests total)
+- `README.md`, `CLAUDE.md` — documented the auto-detection behavior
 
 ---
 

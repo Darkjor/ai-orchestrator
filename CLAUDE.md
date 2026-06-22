@@ -55,11 +55,13 @@ There is no build step — this is a pure Python project with `setuptools`.
 
 **Command responsibilities**:
 
-- `init` — copies `AGENTS.md` to the project root (skipped, with a warning, if one already exists) and the remaining templates into `.ai/`; is a no-op if `.ai/` already exists
+- `init` — copies `AGENTS.md` to the project root (skipped, with a warning, if one already exists) and the remaining templates into `.ai/`; is a no-op if `.ai/` already exists. Then runs `detect_project_context()` to auto-fill `.ai/config.json` (`project_name`, `project_type`, `project_stack`, `run_command`, `test_command`) from the host project's manifest files, and stamps today's date into `.ai/CONTEXT.md`'s "Current State" header
 - `triage` — reads `.ai/ALERTS.md` via `parse_alerts()`, reads `.ai/config.json` for model recommendations, scans for merge conflicts, checks for secret files, optionally runs `test_command` from config
 - `check` — git pre-commit guard; exits 1 if codebase files are staged but neither `.ai/` nor `AGENTS.md` was touched
 - `hook-install` — writes `.git/hooks/pre-commit` that calls `ai-orch check`
 - `handoff` — interactive wizard that updates `CONTEXT.md` (regex-replaces "Current State" date and injects bullets), appends to `ALERTS.md` and `DECISIONS.md`, and optionally `git add . && git commit`
+
+**Project context detection**: `detect_project_context(root=".")` in `main.py` inspects the host project's manifest files to fill in real values instead of placeholders — `pyproject.toml` (regex for `[project] name` and `[project.scripts]` entries → Python/CLI), `package.json` (`name` + `scripts.start`/`scripts.test` → Node.js), `go.mod`, `Cargo.toml`, falling back to the directory name and `"Unknown"` stack when no manifest matches. Wrapped in try/except so a malformed manifest never breaks `init`.
 
 **Tests**: `tests/test_cli.py` uses `typer.testing.CliRunner` with `tmp_path` fixtures. Tests `os.chdir()` into a temp directory and invoke commands directly through the runner. No mocking — tests call real git subprocess commands where needed.
 

@@ -48,6 +48,68 @@ def parse_alerts(alerts_path: str):
                     })
     return alerts
 
+def detect_project_context(root: str = "."):
+    """Detect project name, type, stack, and run/test commands from manifest files."""
+    detected = {
+        "project_name": os.path.basename(os.path.abspath(root)),
+        "project_type": "Unknown",
+        "project_stack": "Unknown",
+        "run_command": "echo 'Run command not configured'",
+        "test_command": "echo 'Test command not configured'",
+    }
+
+    package_json = os.path.join(root, "package.json")
+    pyproject = os.path.join(root, "pyproject.toml")
+    go_mod = os.path.join(root, "go.mod")
+    cargo_toml = os.path.join(root, "Cargo.toml")
+
+    if os.path.exists(package_json):
+        try:
+            with open(package_json, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            detected["project_name"] = data.get("name", detected["project_name"])
+            detected["project_stack"] = "Node.js"
+            detected["project_type"] = "CLI" if "bin" in data else "Library/App"
+            scripts = data.get("scripts", {})
+            if "test" in scripts:
+                detected["test_command"] = "npm test"
+            if "start" in scripts:
+                detected["run_command"] = "npm start"
+            elif "dev" in scripts:
+                detected["run_command"] = "npm run dev"
+        except Exception:
+            pass
+    elif os.path.exists(pyproject):
+        try:
+            with open(pyproject, "r", encoding="utf-8") as f:
+                content = f.read()
+            name_match = re.search(r'(?m)^name\s*=\s*"([^"]+)"', content)
+            if name_match:
+                detected["project_name"] = name_match.group(1)
+            detected["project_stack"] = "Python"
+            script_match = re.search(r"\[project\.scripts\]\s*\n\s*([\w-]+)\s*=", content)
+            if script_match:
+                detected["project_type"] = "CLI"
+                detected["run_command"] = f"{script_match.group(1)} --help"
+            else:
+                detected["project_type"] = "Library"
+            if os.path.exists(os.path.join(root, "tests")):
+                detected["test_command"] = "pytest"
+        except Exception:
+            pass
+    elif os.path.exists(go_mod):
+        detected["project_stack"] = "Go"
+        detected["project_type"] = "CLI/Library"
+        detected["run_command"] = "go run ."
+        detected["test_command"] = "go test ./..."
+    elif os.path.exists(cargo_toml):
+        detected["project_stack"] = "Rust"
+        detected["project_type"] = "CLI/Library"
+        detected["run_command"] = "cargo run"
+        detected["test_command"] = "cargo test"
+
+    return detected
+
 @app.command()
 def init():
     """Initialize .ai/ orchestrator folder and AGENTS.md in current directory."""
@@ -72,6 +134,34 @@ def init():
         else:
             dst = os.path.join(".ai", filename)
         shutil.copy(src, dst)
+
+    detected = detect_project_context()
+    config_path = os.path.join(".ai", "config.json")
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            config = json.load(f)
+        config.update(detected)
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(config, f, indent=2)
+            f.write("\n")
+        console.print(f"[cyan]Detected project: {detected['project_name']} ({detected['project_stack']})[/cyan]")
+    except Exception as e:
+        console.print(f"[yellow]Warning: Could not auto-fill .ai/config.json. Reason: {e}[/yellow]")
+
+    today_str = datetime.date.today().strftime("%Y-%m-%d")
+    context_path = os.path.join(".ai", "CONTEXT.md")
+    try:
+        with open(context_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        content = re.sub(
+            r"## Current State \(updated: [^\)]+\)",
+            f"## Current State (updated: {today_str})",
+            content,
+        )
+        with open(context_path, "w", encoding="utf-8") as f:
+            f.write(content)
+    except Exception:
+        pass
 
     console.print("[green]Successfully initialized .ai/ orchestrator folder and AGENTS.md![/green]")
 

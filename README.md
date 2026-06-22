@@ -41,7 +41,7 @@ ai-orch handoff
 
 | Command | What it does |
 |---------|-------------|
-| `ai-orch init` | Creates `AGENTS.md` at the project root + `.ai/` folder with 6 context files |
+| `ai-orch init` | Creates `AGENTS.md` at the project root + `.ai/` folder with 6 context files, auto-detecting the project's name/stack/commands |
 | `ai-orch triage` | Shows active alerts, model recommendations, runs tests |
 | `ai-orch check` | Pre-commit guard: fails if code changed but `AGENTS.md`/`.ai/` weren't updated |
 | `ai-orch hook-install` | Installs `ai-orch check` as a git pre-commit hook |
