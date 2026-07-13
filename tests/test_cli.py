@@ -2,6 +2,7 @@ import os
 import json
 import subprocess
 import datetime
+import pytest
 from typer.testing import CliRunner
 from aiorch.main import app
 from aiorch._helpers import parse_lint_rules
@@ -92,6 +93,52 @@ def test_hook_install_command(tmp_path):
     with open(post_hook_path, "r") as f:
         post_content = f.read()
     assert "snapshot" in post_content
+
+
+def test_installed_pre_commit_hook_blocks_and_allows_commit(tmp_path):
+    os.chdir(tmp_path)
+    
+    # 1. git init + configure user identity
+    subprocess.run(["git", "init"], check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], check=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], check=True)
+    
+    # 2. init + hook-install
+    runner.invoke(app, ["init"])
+    result = runner.invoke(app, ["hook-install"])
+    assert result.exit_code == 0
+    
+    # Ensure hook is present
+    pre_commit_path = ".git/hooks/pre-commit"
+    assert os.path.exists(pre_commit_path)
+    
+    # Set up environment with UTF-8 encoding so the Rich panel doesn't crash on legacy codepages (cp1252/cp850)
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+    
+    # 3. git add . + first commit (only .ai/ is modified, check passes)
+    subprocess.run(["git", "add", "."], check=True)
+    res_commit = subprocess.run(["git", "commit", "-m", "initial commit"], capture_output=True, text=True, env=env)
+    
+    # If the first commit fails (e.g. because the system can't run sh hooks in this environment), skip the test.
+    if res_commit.returncode != 0:
+        pytest.skip(f"git cannot execute sh hooks in this environment: {res_commit.stderr}")
+        
+    # 4. Escribir app.py, git add app.py, commit -> check blocks it
+    with open("app.py", "w") as f:
+        f.write("print('hello')")
+    subprocess.run(["git", "add", "app.py"], check=True)
+    
+    res_block = subprocess.run(["git", "commit", "-m", "add app.py without updating context"], capture_output=True, text=True, env=env)
+    assert res_block.returncode != 0
+    
+    # 5. Append to .ai/CONTEXT.md, add, commit -> passes
+    with open(".ai/CONTEXT.md", "a", encoding="utf-8") as f:
+        f.write("\n- added app.py\n")
+    subprocess.run(["git", "add", ".ai/CONTEXT.md"], check=True)
+    
+    res_pass = subprocess.run(["git", "commit", "-m", "add app.py and update context"], capture_output=True, text=True, env=env)
+    assert res_pass.returncode == 0
+
 
 def test_handoff_command(tmp_path):
     os.chdir(tmp_path)

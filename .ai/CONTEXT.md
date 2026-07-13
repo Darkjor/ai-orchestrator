@@ -27,6 +27,7 @@
 
 ## Most recently changed
 
+- tests/ - Add pre-commit hook integration test, expand domain modules coverage (analysis, context, decisions, config).
 - LICENSE - Add MIT license.
 - pyproject.toml - Declare package search parameters, add Python 3.12 classifier and pytest-cov.
 - .gitignore - Explicitly ignore .env files.
@@ -38,7 +39,6 @@
 - src/aiorch/context.py - Log warning in update_context when expected markers are missing.
 - src/aiorch/observability.py - Implement disabled_reason attribute and log swallowed exceptions.
 - src/aiorch/__init__.py - Sync package version to 0.3.0.
-- tests/ - Add unit tests for git missing, marker warnings, and observability logging.
 
 ---
 
@@ -50,7 +50,7 @@
 | Python version | 3.10+ |
 | Commands | 13 |
 | Source modules | 13 + compat shim (`src/aiorch/`) |
-| Tests | 101 (all passing) |
+| Tests | 115 (114 passing, 1 skipped) |
 | Dependencies | typer>=0.9.0, rich>=13.0.0 (supabase optional) |
 | Entry point | `ai-orch` |
 | Template files | 9 (8 copied by init; ANALYSIS.md is runtime-only) |

@@ -182,3 +182,215 @@ def test_update_context_logs_when_markers_missing(tmp_path, caplog):
     assert "file.py" not in content
     assert any("What works right now" in record.message for record in caplog.records)
     assert any("Most recently changed" in record.message for record in caplog.records)
+
+
+# ---------------------------------------------------------------------------
+# analysis.py tests
+# ---------------------------------------------------------------------------
+
+def test_parse_analysis_status_missing_file():
+    from aiorch.analysis import parse_analysis_status
+    assert parse_analysis_status("nonexistent.md") == "NOT_FOUND"
+
+
+def test_set_analysis_status_roundtrip(tmp_path):
+    from aiorch.analysis import parse_analysis_status, set_analysis_status
+    analysis_path = tmp_path / "ANALYSIS.md"
+    analysis_path.write_text("# Analysis\n\n## Status\nPENDING\n", encoding="utf-8")
+    
+    assert parse_analysis_status(str(analysis_path)) == "PENDING"
+    set_analysis_status(str(analysis_path), "QA_APPROVED")
+    assert parse_analysis_status(str(analysis_path)) == "QA_APPROVED"
+    assert set_analysis_status(str(tmp_path / "nonexistent.md"), "QA_APPROVED") is False
+
+
+def test_write_analysis_report_then_qa_cross_check_clean(tmp_path):
+    from aiorch.analysis import write_analysis_report, qa_cross_check
+    
+    analysis_path = tmp_path / "ANALYSIS.md"
+    metrics = {
+        "alerts": [],
+        "p0": 0,
+        "p1": 0,
+        "p2": 0,
+        "pending": [],
+        "pending_count": 0,
+        "decisions_count": 0,
+        "tests_collected": 0,
+        "git_modified": 0,
+    }
+    write_analysis_report(str(analysis_path), metrics, "qa_reviewer", "2026-07-12")
+    
+    (tmp_path / "ALERTS.md").write_text("## P0\n\n## P1\n\n## P2\n", encoding="utf-8")
+    (tmp_path / "PENDING.md").write_text("## Database\n\n## Infrastructure\n\n## Other\n\n## DONE\n", encoding="utf-8")
+    
+    issues = qa_cross_check(str(analysis_path), str(tmp_path))
+    assert issues == []
+
+
+def test_qa_cross_check_detects_p0_drift(tmp_path):
+    from aiorch.analysis import write_analysis_report, qa_cross_check
+    
+    analysis_path = tmp_path / "ANALYSIS.md"
+    metrics = {
+        "alerts": [],
+        "p0": 0,
+        "p1": 0,
+        "p2": 0,
+        "pending": [],
+        "pending_count": 0,
+        "decisions_count": 0,
+        "tests_collected": 0,
+        "git_modified": 0,
+    }
+    write_analysis_report(str(analysis_path), metrics, "qa_reviewer", "2026-07-12")
+    
+    (tmp_path / "ALERTS.md").write_text("## P0\n### [ALERT-001] Blocker\n\n## P1\n\n## P2\n", encoding="utf-8")
+    (tmp_path / "PENDING.md").write_text("## Database\n\n## Infrastructure\n\n## Other\n\n## DONE\n", encoding="utf-8")
+    
+    issues = qa_cross_check(str(analysis_path), str(tmp_path))
+    assert len(issues) == 1
+    assert "P0" in issues[0]
+
+
+def test_collect_project_metrics_offline(tmp_path):
+    from aiorch.analysis import collect_project_metrics
+    ai_dir = tmp_path / ".ai"
+    ai_dir.mkdir()
+    (ai_dir / "ALERTS.md").write_text("## P0\n\n## P1\n\n## P2\n", encoding="utf-8")
+    (ai_dir / "PENDING.md").write_text("## Database\n\n## Infrastructure\n\n## Other\n\n## DONE\n", encoding="utf-8")
+    (ai_dir / "DECISIONS.md").write_text("## Decisions\n", encoding="utf-8")
+    
+    metrics = collect_project_metrics(str(ai_dir))
+    assert metrics["p0"] == 0
+    assert metrics["pending_count"] == 0
+    assert metrics["decisions_count"] == 0
+    assert "tests_collected" in metrics
+    assert "git_modified" in metrics
+
+
+# ---------------------------------------------------------------------------
+# context.py tests
+# ---------------------------------------------------------------------------
+
+def test_update_section_prefix_case_insensitive(tmp_path):
+    from aiorch.context import update_section
+    f = tmp_path / "FILE.md"
+    f.write_text("## SECTION A\nOld value\n---", encoding="utf-8")
+    
+    res = update_section(str(f), "section a", "New value")
+    assert res is True
+    content = f.read_text(encoding="utf-8")
+    assert "New value" in content
+    assert "Old value" not in content
+
+
+def test_update_section_missing_returns_false(tmp_path):
+    from aiorch.context import update_section
+    f = tmp_path / "FILE.md"
+    f.write_text("## SECTION A\nValue\n", encoding="utf-8")
+    res = update_section(str(f), "section b", "New value")
+    assert res is False
+
+
+def test_update_context_prepends_accomplishments_and_replaces_changed(tmp_path):
+    from aiorch.context import update_context
+    f = tmp_path / "CONTEXT.md"
+    f.write_text("## Current State (updated: 2026-01-01)\n**What works right now:**\n- old acc\n\n**Most recently changed:**\n- old changed\n", encoding="utf-8")
+    
+    res = update_context(str(f), "2026-07-12", "new acc 1", "new changed 1")
+    assert res is True
+    content = f.read_text(encoding="utf-8")
+    assert "- new acc 1" in content
+    assert "- old acc" in content
+    assert "- new changed 1" in content
+    assert "- old changed" not in content
+    
+    res = update_context(str(f), "2026-07-13", "new acc 2", "new changed 2")
+    assert res is True
+    content = f.read_text(encoding="utf-8")
+    assert "- new acc 2" in content
+    assert "- new acc 1" in content
+    assert "- old acc" in content
+    assert "- new changed 2" in content
+    assert "- new changed 1" not in content
+
+
+def test_inject_snapshot_upsert_no_duplicates(tmp_path):
+    from aiorch.context import inject_snapshot
+    f = tmp_path / "CONTEXT.md"
+    f.write_text("## Codebase Snapshot\nOld snap\n", encoding="utf-8")
+    
+    inject_snapshot(str(f), "New snap 1")
+    content = f.read_text(encoding="utf-8")
+    assert content.count("## Codebase Snapshot") == 1
+    assert "New snap 1" in content
+    
+    inject_snapshot(str(f), "New snap 2")
+    content = f.read_text(encoding="utf-8")
+    assert content.count("## Codebase Snapshot") == 1
+    assert "New snap 2" in content
+    assert "New snap 1" not in content
+
+
+def test_bundle_context_reading_order(tmp_path):
+    from aiorch.context import bundle_context
+    (tmp_path / "ORCHESTRATOR.md").write_text("Manual content\n", encoding="utf-8")
+    (tmp_path / "CONTEXT.md").write_text("Context content\n", encoding="utf-8")
+    (tmp_path / "ALERTS.md").write_text("Alerts content\n", encoding="utf-8")
+    (tmp_path / "DECISIONS.md").write_text("Decisions content\n", encoding="utf-8")
+    
+    bundle = bundle_context(str(tmp_path))
+    assert "Manual content" in bundle
+    assert "Context content" in bundle
+    assert "Alerts content" in bundle
+    idx_manual = bundle.index("Manual content")
+    idx_context = bundle.index("Context content")
+    idx_alerts = bundle.index("Alerts content")
+    assert idx_manual < idx_context < idx_alerts
+
+
+# ---------------------------------------------------------------------------
+# decisions.py tests
+# ---------------------------------------------------------------------------
+
+def test_count_decisions(tmp_path):
+    from aiorch.decisions import count_decisions, append_decision
+    dec_path = tmp_path / "DECISIONS.md"
+    assert count_decisions(str(dec_path)) == 0
+    
+    dec_path.write_text("## Design Decisions\n", encoding="utf-8")
+    assert count_decisions(str(dec_path)) == 0
+    
+    append_decision(str(dec_path), {"id": "DEC-001", "title": "Test dec 1", "context": "Rationale 1"}, "2026-07-12")
+    assert count_decisions(str(dec_path)) == 1
+    
+    append_decision(str(dec_path), {"id": "DEC-002", "title": "Test dec 2", "context": "Rationale 2"}, "2026-07-13")
+    assert count_decisions(str(dec_path)) == 2
+
+
+def test_append_decision_missing_file_logs(tmp_path, caplog):
+    import logging
+    from aiorch.decisions import append_decision
+    dec_path = tmp_path / "nonexistent" / "DECISIONS.md"
+    
+    with caplog.at_level(logging.WARNING, logger="aiorch"):
+        append_decision(str(dec_path), {"id": "DEC-001", "title": "Test dec 1", "context": "Rationale 1"}, "2026-07-12")
+    assert any("does not exist" in record.message for record in caplog.records)
+
+
+# ---------------------------------------------------------------------------
+# config.py tests
+# ---------------------------------------------------------------------------
+
+def test_load_config_corrupt_returns_empty_and_logs(tmp_path, caplog):
+    import logging
+    from aiorch.config import load_config
+    conf_path = tmp_path / "config.json"
+    conf_path.write_text("{ corrupt json }", encoding="utf-8")
+    
+    with caplog.at_level(logging.WARNING, logger="aiorch"):
+        config = load_config(str(conf_path))
+    assert config == {}
+    assert any("unreadable" in record.message for record in caplog.records)
+
