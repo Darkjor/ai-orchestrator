@@ -1,21 +1,31 @@
-# Project Context — ai-orch (orquestador v1)
+# Project Context — Auto-maintained
 
-**Last updated**: 2026-07-13
-**Updated by**: Claude Code (Antigravity)
+> This file is updated by AI agents after significant work.
+> It is the fastest way to get up to speed (read before anything else).
+> Keep it under 80 lines. Remove stale info aggressively.
+> Para contexto completo (QA agents, análisis): `ai-orch export`
+
+## .ai/ Folder Index
+
+| File | Purpose |
+|------|---------|
+| ORCHESTRATOR.md | CEO arrival protocol — read this FIRST |
+| ALERTS.md | Active fires P0/P1/P2 — check before any feature work |
+| DECISIONS.md | Why things are built the way they are |
+| WHEELS.md | Catalog of tools in use + failed experiments |
+| DISCUSSIONS.md | Handoff and asynchronous debate board |
+| CONTEXT.md | This file — live project state |
 
 ---
 
-## What works right now
+## Current State (updated: 2026-07-13)
 
-- All **13 commands** verified by smoke test on a clean project: `init`, `triage`,
-  `check`, `hook-install`, `handoff`, `snapshot`, `update`, `action-add`,
-  `action-resolve`, `analyze`, `qa`, `export`, `observe`
-- v0.3.0 architecture: logic split into 11 single-responsibility modules
-  (`alerts`, `pending`, `context`, `decisions`, `analysis`, `gitops`, `lint`,
-  `config`, `logs`, `models`, `handoff_ui`) — `main.py` is presentation-only (<500 lines)
-- `aiorch._helpers` kept as frozen backward-compat re-export shim
-- Local logging: swallowed errors go to `.ai/logs/aiorch.log` (gitignored)
-- 101 tests pass. No active alerts.
+**What works right now:**
+- All **13 commands** verified by smoke test on a clean project: `init`, `triage`, `check`, `hook-install`, `handoff`, `snapshot`, `update`, `action-add`, `action-resolve`, `analyze`, `qa`, `export`, `observe`.
+- v0.3.0 architecture: logic split into 11 single-responsibility modules (`alerts`, `pending`, `context`, `decisions`, `analysis`, `gitops`, `lint`, `config`, `logs`, `models`, `handoff_ui`) — `main.py` is presentation-only (<500 lines).
+- `aiorch._helpers` kept as frozen backward-compat re-export shim.
+- Local logging: swallowed errors go to `.ai/logs/aiorch.log` (gitignored).
+- 115 tests pass. No active alerts.
 - Robust git missing detection in gitops module.
 - Detailed warnings on missing context markers in update_context.
 - Observability logger tracks initialization disable reasons and logs exceptions.
@@ -23,10 +33,10 @@
 - CI workflows configured for Ubuntu and Windows with Python 3.10-3.12 and 80% coverage threshold.
 - MIT License added. .env excluded from version control in .gitignore.
 
----
+**What does NOT work yet:**
+- (none)
 
-## Most recently changed
-
+**Most recently changed:**
 - tests/ - Add pre-commit hook integration test, expand domain modules coverage (analysis, context, decisions, config).
 - LICENSE - Add MIT license.
 - pyproject.toml - Declare package search parameters, add Python 3.12 classifier and pytest-cov.
@@ -42,7 +52,7 @@
 
 ---
 
-## Key numbers
+## Key Numbers
 
 | Metric | Value |
 |--------|-------|
@@ -51,37 +61,29 @@
 | Commands | 13 |
 | Source modules | 13 + compat shim (`src/aiorch/`) |
 | Tests | 115 (114 passing, 1 skipped) |
-| Dependencies | typer>=0.9.0, rich>=13.0.0 (supabase optional) |
+| Dependencies | typer>=0.26.8, rich>=15.0.0 (supabase optional) |
 | Entry point | `ai-orch` |
 | Template files | 9 (8 copied by init; ANALYSIS.md is runtime-only) |
 
 ---
 
-## Stack
+## Next Block — Planned
 
-- Language: Python 3.11
-- CLI framework: Typer 0.26.7
-- Terminal UI: Rich 13.x
-- Observability (optional): Supabase (`agent_runs` table)
-- Tests: pytest
+- Fase 5 — Resync del .ai/ self-hosted
+- Fase 6 — Exactitud de docs
+- Fase 7 — docs/MANUAL.md (español) + barrido final
 
 ---
 
-## Known environment gotcha
+## Recommended Models for Next Block
 
-The editable install of `ai-orchestrator` is machine-global. On 2026-06-10 the
-`.pth` was found pointing to a DIFFERENT folder (`Escritorio/generacion/src`),
-so imports/tests silently exercised that copy. Fixed with `pip install -e .`
-from this repo. If imports behave strangely, check
-`python -c "import aiorch; print(aiorch.__file__)"` first.
+**Primary**: claude-sonnet-4-6 (balanced capability and cost)
 
----
+**For architecture/design decisions**: claude-opus-4-8 (with extended thinking)
 
-## Next steps
+**For documentation**: claude-haiku-4-5-20251001 (lightweight)
 
-- Publish v0.3.0 (dist/ currently holds the 0.2.0 wheel)
-- Consider `ai-orch status` dashboard command
-- Optional: CI markdownlint for docs
+See `.ai/config.json` and ORCHESTRATOR.md for detailed model selection guide.
 
 ---
 

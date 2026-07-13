@@ -1,4 +1,4 @@
-# Pending Manual Actions — <project_name>
+# Pending Manual Actions — ai-orch (orquestador)
 
 > Out-of-band tasks that require human intervention outside the codebase.
 > An AI agent cannot execute these — a human must complete them.
@@ -20,6 +20,10 @@
 
 ## Other
 
+*(none)*
+
+---
+
 ## DONE
 
 ### [ACTION-001] Implementar comando export
@@ -28,10 +32,3 @@
 **Discovered**: 2026-06-05
 **Steps**: [TBD]
 1. Run: `ai-orch action-resolve ACTION-001`
-
-*(none)*
-
----
-
-
-*(none)*
