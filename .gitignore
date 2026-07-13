@@ -2,6 +2,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 .pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
 .venv/
 venv/
 dist/
@@ -22,3 +25,7 @@ ruvector.db
 
 # Internal planning docs
 docs/superpowers/
+
+# secrets
+.env
+

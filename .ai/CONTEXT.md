@@ -19,11 +19,18 @@
 - Robust git missing detection in gitops module.
 - Detailed warnings on missing context markers in update_context.
 - Observability logger tracks initialization disable reasons and logs exceptions.
+- Packaging configured via tool.setuptools.packages.find in pyproject.toml.
+- CI workflows configured for Ubuntu and Windows with Python 3.10-3.12 and 80% coverage threshold.
+- MIT License added. .env excluded from version control in .gitignore.
 
 ---
 
 ## Most recently changed
 
+- LICENSE - Add MIT license.
+- pyproject.toml - Declare package search parameters, add Python 3.12 classifier and pytest-cov.
+- .gitignore - Explicitly ignore .env files.
+- .github/workflows/ci.yml - Expand test matrix to Windows and Ubuntu, add coverage checks.
 - src/aiorch/handoff_ui.py - Extract interactive handoff wizard UI from main.py to keep main.py < 500 lines.
 - src/aiorch/main.py - Import and delegate handoff command to handoff_ui.py, clean unused imports.
 - docs/AI_ARCHITECTURE.md - Document handoff_ui.py module in map and diagrams.
