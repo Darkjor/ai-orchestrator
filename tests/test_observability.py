@@ -105,3 +105,46 @@ def test_get_logger_returns_singleton(monkeypatch):
     logger1 = get_logger()
     logger2 = get_logger()
     assert logger1 is logger2
+
+
+def test_logger_package_missing_sets_reason(monkeypatch):
+    import sys
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_ANON_KEY", "fake-key")
+    monkeypatch.setitem(sys.modules, "supabase", None)
+    logger = SupabaseLogger()
+    assert logger.enabled is False
+    assert logger.disabled_reason == "package_missing"
+
+
+def test_logger_env_missing_sets_reason(monkeypatch):
+    monkeypatch.delenv("SUPABASE_URL", raising=False)
+    monkeypatch.delenv("SUPABASE_ANON_KEY", raising=False)
+    logger = SupabaseLogger()
+    assert logger.enabled is False
+    assert logger.disabled_reason == "env_missing"
+
+
+def test_log_run_failure_is_logged(caplog):
+    import logging
+    mock_client = MagicMock()
+    mock_client.table.side_effect = RuntimeError("network error")
+    logger = SupabaseLogger.__new__(SupabaseLogger)
+    logger._enabled = True
+    logger._client = mock_client
+    with caplog.at_level(logging.WARNING, logger="aiorch"):
+        logger.log_run("analyze", "analyze")
+    assert "log_run failed" in caplog.text
+
+
+def test_get_recent_runs_failure_is_logged(caplog):
+    import logging
+    mock_client = MagicMock()
+    mock_client.table.side_effect = RuntimeError("connection failed")
+    logger = SupabaseLogger.__new__(SupabaseLogger)
+    logger._enabled = True
+    logger._client = mock_client
+    with caplog.at_level(logging.WARNING, logger="aiorch"):
+        result = logger.get_recent_runs()
+    assert result == []
+    assert "get_recent_runs failed" in caplog.text

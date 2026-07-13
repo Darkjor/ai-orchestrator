@@ -502,6 +502,7 @@ def qa():
     console.print(f"\n[yellow][WARN] QA ESCALADO — Alerta {alert_id} y acción {action_id} creadas (auto-heal)[/yellow]")
     override = typer.confirm("\n¿Aprobar de todas formas? (override humano)", default=False)
     if override:
+        get_logger().log_run("qa", "qa", latency_ms=int((time.time() - t0) * 1000), status="override_approved")
         set_analysis_status(analysis_path, "QA_APPROVED")
         console.print("[green][OK] Override humano — status: QA_APPROVED[/green]")
     else:
@@ -544,10 +545,14 @@ def observe(
     """Show recent agent run metrics from the Supabase observability store."""
     obs = get_logger()
     if not obs.enabled:
-        console.print("[yellow][WARN] Supabase not configured.[/yellow]")
-        console.print("Set SUPABASE_URL and SUPABASE_ANON_KEY environment variables.")
-        console.print("See .env.example for setup instructions.")
-        console.print("Run scripts/supabase_schema.sql in your Supabase SQL editor first.")
+        if getattr(obs, "disabled_reason", None) == "package_missing":
+            console.print("[yellow][WARN] Supabase support is not installed.[/yellow]")
+            console.print('Install it with: pip install "ai-orchestrator[observability]"')
+        else:
+            console.print("[yellow][WARN] Supabase not configured.[/yellow]")
+            console.print("Set SUPABASE_URL and SUPABASE_ANON_KEY environment variables.")
+            console.print("See .env.example for setup instructions.")
+            console.print("Run scripts/supabase_schema.sql in your Supabase SQL editor first.")
         raise typer.Exit(0)
     runs = obs.get_recent_runs(limit=limit)
     if not runs:

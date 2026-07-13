@@ -1,7 +1,7 @@
 # Project Context — ai-orch (orquestador v1)
 
-**Last updated**: 2026-06-10
-**Updated by**: Claude Code (Fable 5)
+**Last updated**: 2026-07-12
+**Updated by**: Claude Code (Antigravity)
 
 ---
 
@@ -15,16 +15,21 @@
   `config`, `logs`, `models`) — `main.py` is presentation-only (<500 lines)
 - `aiorch._helpers` kept as frozen backward-compat re-export shim
 - Local logging: swallowed errors go to `.ai/logs/aiorch.log` (gitignored)
-- 93 tests pass. No active alerts.
+- 101 tests pass. No active alerts.
+- Robust git missing detection in gitops module.
+- Detailed warnings on missing context markers in update_context.
+- Observability logger tracks initialization disable reasons and logs exceptions.
 
 ---
 
 ## Most recently changed
 
-- .github/workflows/ci.yml - CI now runs on push to master (was develop-only)
-- README.md - Install section documents the real path: pip install git+...@v0.3.0 and update via pip install -U git+...@master
-- src/aiorch/ - domain-module split (10 modules), TypedDict contracts, local logging
-- docs/AI_ARCHITECTURE.md - master context map for AI agents
+- src/aiorch/gitops.py - Catch OSError in run_git_commit if git is missing.
+- src/aiorch/context.py - Log warning in update_context when expected markers are missing.
+- src/aiorch/observability.py - Implement disabled_reason attribute and log swallowed exceptions.
+- src/aiorch/main.py - Differentiate observe command output by disabled reason and log QA manual override.
+- src/aiorch/__init__.py - Sync package version to 0.3.0.
+- tests/ - Add unit tests for git missing, marker warnings, and observability logging.
 
 ---
 
@@ -36,7 +41,7 @@
 | Python version | 3.10+ |
 | Commands | 13 |
 | Source modules | 12 + compat shim (`src/aiorch/`) |
-| Tests | 93 (all passing) |
+| Tests | 101 (all passing) |
 | Dependencies | typer>=0.9.0, rich>=13.0.0 (supabase optional) |
 | Entry point | `ai-orch` |
 | Template files | 9 (8 copied by init; ANALYSIS.md is runtime-only) |

@@ -1013,3 +1013,36 @@ def test_observe_limit_option(tmp_path):
         result = runner.invoke(app, ["observe", "--limit", "5"])
     assert result.exit_code == 0
     mock_logger.get_recent_runs.assert_called_once_with(limit=5)
+
+
+def test_observe_reports_missing_package(tmp_path):
+    os.chdir(tmp_path)
+    with patch("aiorch.main.get_logger") as mock_get_logger:
+        mock_logger = MagicMock()
+        mock_logger.enabled = False
+        mock_logger.disabled_reason = "package_missing"
+        mock_get_logger.return_value = mock_logger
+        result = runner.invoke(app, ["observe"])
+    assert result.exit_code == 0
+    assert "Supabase support is not installed" in result.output
+    assert "SUPABASE_URL" not in result.output
+
+
+def test_qa_override_logs_run(tmp_path):
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    runner.invoke(app, ["analyze"])
+    with open(".ai/ANALYSIS.md", encoding="utf-8") as f:
+        content = f.read()
+    content = content.replace("| Open alerts P0 | 0 |", "| Open alerts P0 | 5 |")
+    with open(".ai/ANALYSIS.md", "w", encoding="utf-8") as f:
+        f.write(content)
+    with patch("aiorch.main.get_logger") as mock_get_logger:
+        mock_logger = MagicMock()
+        mock_get_logger.return_value = mock_logger
+        result = runner.invoke(app, ["qa"], input="y\n")
+    assert result.exit_code == 0
+    assert mock_logger.log_run.called
+    _, kwargs = mock_logger.log_run.call_args
+    assert kwargs.get("status") == "override_approved"
+

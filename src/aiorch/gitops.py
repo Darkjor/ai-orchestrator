@@ -153,11 +153,17 @@ def run_git_commit(block_num: str, commit_type: str, msg: str) -> tuple[bool, st
         subprocess.run(["git", "add", "."], check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as e:
         return False, f"git add failed: {e.stderr.strip()}"
+    except OSError as e:
+        get_local_logger().warning("run_git_commit: git unavailable: %s", e)
+        return False, f"git add failed: {e}"
     commit_msg = f"[{block_num}] {commit_type}: {msg}"
     try:
         subprocess.run(["git", "commit", "-m", commit_msg], check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as e:
         return False, f"git commit failed: {e.stderr.strip()}"
+    except OSError as e:
+        get_local_logger().warning("run_git_commit: git unavailable: %s", e)
+        return False, f"git commit failed: {e}"
     return True, commit_msg
 
 

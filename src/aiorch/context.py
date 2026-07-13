@@ -82,15 +82,23 @@ def update_context(context_path: str, today_str: str, accomplishments: str, chan
 
     if accomplishments.strip():
         lines = content.splitlines()
+        found = False
         for i, line in enumerate(lines):
             if "**What works right now:**" in line:
                 new_bullets = [f"- {a.strip()}" for a in accomplishments.split(",") if a.strip()]
                 lines = lines[: i + 1] + new_bullets + lines[i + 1:]
+                found = True
                 break
+        if not found:
+            get_local_logger().warning(
+                "update_context: marker '**What works right now:**' not found in %s — accomplishments not written",
+                context_path
+            )
         content = "\n".join(lines)
 
     if changed_files.strip():
         lines = content.splitlines()
+        found = False
         for i, line in enumerate(lines):
             if "**Most recently changed:**" in line:
                 new_bullets = [f"- {cf.strip()}" for cf in changed_files.split(",") if cf.strip()]
@@ -102,7 +110,13 @@ def update_context(context_path: str, today_str: str, accomplishments: str, chan
                         next_sec_idx = j
                         break
                 lines = lines[: i + 1] + new_bullets + lines[next_sec_idx:]
+                found = True
                 break
+        if not found:
+            get_local_logger().warning(
+                "update_context: marker '**Most recently changed:**' not found in %s — accomplishments not written",
+                context_path
+            )
         content = "\n".join(lines)
 
     with open(context_path, "w", encoding="utf-8") as f:

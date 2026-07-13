@@ -1,6 +1,7 @@
 import os
-import time
 from typing import Optional
+
+from aiorch.logs import get_local_logger
 
 
 class SupabaseLogger:
@@ -11,16 +12,28 @@ class SupabaseLogger:
     """
 
     def __init__(self) -> None:
+        self.disabled_reason: Optional[str] = None
         url = os.environ.get("SUPABASE_URL", "").strip()
         key = os.environ.get("SUPABASE_ANON_KEY", "").strip()
         self._enabled = bool(url and key)
         self._client = None
-        if self._enabled:
+        if not self._enabled:
+            self.disabled_reason = "env_missing"
+        else:
             try:
                 from supabase import create_client  # lazy — only needed when configured
                 self._client = create_client(url, key)
-            except Exception:
+            except ImportError as e:
                 self._enabled = False
+                self.disabled_reason = "package_missing"
+                get_local_logger().warning(
+                    "SupabaseLogger init failed: package missing (hint: pip install \"ai-orchestrator[observability]\"): %s",
+                    e,
+                )
+            except Exception as e:
+                self._enabled = False
+                self.disabled_reason = "init_error"
+                get_local_logger().warning("SupabaseLogger init failed: %s", e)
 
     @property
     def enabled(self) -> bool:
@@ -52,8 +65,8 @@ class SupabaseLogger:
                     "eval_score": eval_score,
                 }
             ).execute()
-        except Exception:
-            pass  # never let observability break the CLI
+        except Exception as exc:
+            get_local_logger().warning("SupabaseLogger.log_run failed (swallowed): %s", exc)
 
     def get_recent_runs(self, limit: int = 20) -> list:
         if not self._enabled or self._client is None:
@@ -67,7 +80,8 @@ class SupabaseLogger:
                 .execute()
             )
             return result.data or []
-        except Exception:
+        except Exception as exc:
+            get_local_logger().warning("SupabaseLogger.get_recent_runs failed (swallowed): %s", exc)
             return []
 
 

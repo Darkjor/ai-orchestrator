@@ -56,6 +56,17 @@ def test_run_git_commit_reports_failure_outside_repo(tmp_path):
     assert "git add failed" in detail
 
 
+def test_run_git_commit_returns_error_when_git_missing(monkeypatch):
+    """run_git_commit must return (False, error) if subprocess.run raises OSError."""
+    import subprocess
+    def raiser(*args, **kwargs):
+        raise FileNotFoundError("[WinError 2] El sistema no puede encontrar el archivo especificado")
+    monkeypatch.setattr(subprocess, "run", raiser)
+    ok, detail = run_git_commit("1", "feat", "missing git")
+    assert ok is False
+    assert "git add failed" in detail
+
+
 def test_find_secret_files_detects_common_suffixes(tmp_path):
     os.chdir(tmp_path)
     for name in (".env", "server.pem", "deploy.key", "safe.txt"):
@@ -152,3 +163,22 @@ def test_local_logger_writes_file_when_ai_folder_exists(tmp_path):
         assert "disk trail for agents" in log_file.read_text(encoding="utf-8")
     finally:
         _reset_aiorch_logger()
+
+
+def test_update_context_logs_when_markers_missing(tmp_path, caplog):
+    """update_context must warn when accomplishments or changed_files markers are missing."""
+    import logging
+    from aiorch.context import update_context
+    context_file = tmp_path / "CONTEXT.md"
+    context_file.write_text("## Current State (updated: 2026-01-01)\nSome text without markers.\n", encoding="utf-8")
+    
+    with caplog.at_level(logging.WARNING, logger="aiorch"):
+        res = update_context(str(context_file), "2026-07-12", "did X", "file.py")
+    
+    assert res is True
+    content = context_file.read_text(encoding="utf-8")
+    assert "2026-01-01" not in content  # date should be updated
+    assert "did X" not in content
+    assert "file.py" not in content
+    assert any("What works right now" in record.message for record in caplog.records)
+    assert any("Most recently changed" in record.message for record in caplog.records)
