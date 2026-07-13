@@ -37,6 +37,8 @@
 - (none)
 
 **Most recently changed:**
+- docs/MANUAL.md - Create user manual in Spanish.
+- README.md - Add link to the user manual.
 - tests/ - Add pre-commit hook integration test, expand domain modules coverage (analysis, context, decisions, config).
 - LICENSE - Add MIT license.
 - pyproject.toml - Declare package search parameters, add Python 3.12 classifier and pytest-cov.

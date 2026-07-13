@@ -61,7 +61,8 @@ ai-orch handoff
 | `ai-orch export` | Bundles all `.ai/` files into one Markdown document (stdout or `--out`) |
 | `ai-orch observe` | Shows recent agent-run metrics from the optional Supabase store |
 
-Architecture and data contracts for contributors (human or AI): [docs/AI_ARCHITECTURE.md](docs/AI_ARCHITECTURE.md).
+* Para documentación detallada y en español, consulta el [Manual de Usuario](docs/MANUAL.md).
+* Architecture and data contracts for contributors (human or AI): [docs/AI_ARCHITECTURE.md](docs/AI_ARCHITECTURE.md).
 
 ## The `.ai/` folder
 
