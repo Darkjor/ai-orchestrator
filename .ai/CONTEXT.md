@@ -1,6 +1,6 @@
 # Project Context — ai-orch (orquestador v1)
 
-**Last updated**: 2026-07-12
+**Last updated**: 2026-07-13
 **Updated by**: Claude Code (Antigravity)
 
 ---
@@ -10,9 +10,9 @@
 - All **13 commands** verified by smoke test on a clean project: `init`, `triage`,
   `check`, `hook-install`, `handoff`, `snapshot`, `update`, `action-add`,
   `action-resolve`, `analyze`, `qa`, `export`, `observe`
-- v0.3.0 architecture: logic split into 10 single-responsibility domain modules
+- v0.3.0 architecture: logic split into 11 single-responsibility modules
   (`alerts`, `pending`, `context`, `decisions`, `analysis`, `gitops`, `lint`,
-  `config`, `logs`, `models`) — `main.py` is presentation-only (<500 lines)
+  `config`, `logs`, `models`, `handoff_ui`) — `main.py` is presentation-only (<500 lines)
 - `aiorch._helpers` kept as frozen backward-compat re-export shim
 - Local logging: swallowed errors go to `.ai/logs/aiorch.log` (gitignored)
 - 101 tests pass. No active alerts.
@@ -24,10 +24,12 @@
 
 ## Most recently changed
 
+- src/aiorch/handoff_ui.py - Extract interactive handoff wizard UI from main.py to keep main.py < 500 lines.
+- src/aiorch/main.py - Import and delegate handoff command to handoff_ui.py, clean unused imports.
+- docs/AI_ARCHITECTURE.md - Document handoff_ui.py module in map and diagrams.
 - src/aiorch/gitops.py - Catch OSError in run_git_commit if git is missing.
 - src/aiorch/context.py - Log warning in update_context when expected markers are missing.
 - src/aiorch/observability.py - Implement disabled_reason attribute and log swallowed exceptions.
-- src/aiorch/main.py - Differentiate observe command output by disabled reason and log QA manual override.
 - src/aiorch/__init__.py - Sync package version to 0.3.0.
 - tests/ - Add unit tests for git missing, marker warnings, and observability logging.
 
@@ -40,7 +42,7 @@
 | Version | 0.3.0 |
 | Python version | 3.10+ |
 | Commands | 13 |
-| Source modules | 12 + compat shim (`src/aiorch/`) |
+| Source modules | 13 + compat shim (`src/aiorch/`) |
 | Tests | 101 (all passing) |
 | Dependencies | typer>=0.9.0, rich>=13.0.0 (supabase optional) |
 | Entry point | `ai-orch` |
@@ -84,6 +86,7 @@ from this repo. If imports behave strangely, check
 - `src/aiorch/context.py`: update_section, update_context, generate_snapshot, inject_snapshot, bundle_context
 - `src/aiorch/decisions.py`: append_decision, count_decisions
 - `src/aiorch/gitops.py`: GitCommandError, get_staged_files, has_merge_conflicts, scan_conflict_files, find_secret_files, run_git_commit, write_git_hook
+- `src/aiorch/handoff_ui.py`: run_handoff_wizard
 - `src/aiorch/lint.py`: parse_lint_rules, check_staged_lint
 - `src/aiorch/logs.py`: get_local_logger
 - `src/aiorch/main.py`: init, _print_model_recommendations, _run_configured_tests, triage, check, hook_install, handoff, snapshot, update, action_add, action_resolve, analyze, qa, export, observe

@@ -34,6 +34,7 @@ scripts/supabase_schema.sql     # table for the optional observability backend
 
 src/aiorch/
   main.py                       # CLI surface ONLY — 13 Typer commands, Rich rendering
+  handoff_ui.py                 # interactive handoff wizard presentation logic
   models.py                     # TypedDict contracts for every dict crossing modules
   alerts.py                     # ALERTS.md parse / insert / ID sequencing
   pending.py                    # PENDING.md parse / insert / resolve / ID sequencing
@@ -64,6 +65,7 @@ tests/
 graph TD
     subgraph "CLI surface"
         MAIN["src/aiorch/main.py<br/>13 Typer commands"]
+        HANDOFF_UI["src/aiorch/handoff_ui.py<br/>Interactive wizard presentation"]
     end
     subgraph "Domain modules (single responsibility)"
         ALERTS["alerts.py"]
@@ -82,8 +84,10 @@ graph TD
     end
     SHIM["_helpers.py<br/>compat shim"]
 
+    MAIN --> HANDOFF_UI
     MAIN --> ALERTS & PENDING & CONTEXT & DECISIONS & ANALYSIS & GITOPS & LINT & CONFIG
     MAIN --> OBS
+    HANDOFF_UI --> CONTEXT & ALERTS & DECISIONS & GITOPS & CONFIG
     ANALYSIS --> ALERTS & PENDING & DECISIONS
     ALERTS & PENDING & CONTEXT & DECISIONS & ANALYSIS & GITOPS & LINT & CONFIG --> LOGS
     ALERTS & PENDING & ANALYSIS & LINT --> MODELS
@@ -109,7 +113,7 @@ Dependency rules (enforce these in review):
 | `triage` | `main.py:triage` | alerts, pending, config, gitops | `.ai/ALERTS.md`, `.ai/PENDING.md`, `.ai/config.json`, git | stdout only |
 | `check` | `main.py:check` | gitops, lint | git index, `.ai/WHEELS.md` | exit code (1 blocks commit) |
 | `hook-install` | `main.py:hook_install` | gitops | — | `.git/hooks/pre-commit`, `.git/hooks/post-commit` |
-| `handoff` | `main.py:handoff` | context, alerts, decisions, gitops | prompts | `.ai/CONTEXT.md`, `.ai/ALERTS.md`, `.ai/DECISIONS.md`, git commit |
+| `handoff` | `handoff_ui.py` | context, alerts, decisions, gitops | prompts | `.ai/CONTEXT.md`, `.ai/ALERTS.md`, `.ai/DECISIONS.md`, git commit |
 | `snapshot` | `main.py:snapshot` | context | `src/**/*.py` (AST) | `.ai/CONTEXT.md` (## Codebase Snapshot) |
 | `update` | `main.py:update` | context | — | any `.ai/<file>` section |
 | `action-add` | `main.py:action_add` | pending | — | `.ai/PENDING.md` |
