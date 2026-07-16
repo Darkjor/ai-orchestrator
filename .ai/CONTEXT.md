@@ -37,20 +37,12 @@
 - (none)
 
 **Most recently changed:**
-- docs/MANUAL.md - Create user manual in Spanish.
-- README.md - Add link to the user manual.
-- tests/ - Add pre-commit hook integration test, expand domain modules coverage (analysis, context, decisions, config).
-- LICENSE - Add MIT license.
-- pyproject.toml - Declare package search parameters, add Python 3.12 classifier and pytest-cov.
-- .gitignore - Explicitly ignore .env files.
-- .github/workflows/ci.yml - Expand test matrix to Windows and Ubuntu, add coverage checks.
-- src/aiorch/handoff_ui.py - Extract interactive handoff wizard UI from main.py to keep main.py < 500 lines.
-- src/aiorch/main.py - Import and delegate handoff command to handoff_ui.py, clean unused imports.
-- docs/AI_ARCHITECTURE.md - Document handoff_ui.py module in map and diagrams.
-- src/aiorch/gitops.py - Catch OSError in run_git_commit if git is missing.
-- src/aiorch/context.py - Log warning in update_context when expected markers are missing.
-- src/aiorch/observability.py - Implement disabled_reason attribute and log swallowed exceptions.
-- src/aiorch/__init__.py - Sync package version to 0.3.0.
+- tests/test_cli.py - Fix hook-integration test: set encoding="utf-8" on the git commit subprocess calls (was decoding Rich's UTF-8 output as cp1252 on Windows, throwing an unraisable UnicodeDecodeError in the reader thread).
+- README.md, docs/API.md, docs/TROUBLESHOOTING.md, docs/MULTI_AGENT_FAQ.md - Replace remaining broken `pip install ai-orchestrator` (PyPI unpublished) with the git-based install command; bump stale `actions/checkout@v4`/`setup-python@v4` examples to v7/v6.
+- docs/API.md - Fix placeholder `yourorg` repo link; rewrite the "add to _helpers.py" contributing step to point at the real domain-module checklist (the shim is frozen, no new logic).
+- RELEASE_v0.2.0.md - Mark as historical, fix the `snapshot` command description, drop the dead PyPI install block.
+- docs/AI_ARCHITECTURE.md - Fix `get_logger` patch attribution (it's the `observe` CLI tests, not observability tests).
+- README.md - Note that only `analyze`/`qa` latency+status are self-recorded; token/cost/eval columns are filled by callers' own `SupabaseLogger.log_run`.
 
 ---
 

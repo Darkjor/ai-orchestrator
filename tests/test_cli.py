@@ -117,7 +117,7 @@ def test_installed_pre_commit_hook_blocks_and_allows_commit(tmp_path):
     
     # 3. git add . + first commit (only .ai/ is modified, check passes)
     subprocess.run(["git", "add", "."], check=True)
-    res_commit = subprocess.run(["git", "commit", "-m", "initial commit"], capture_output=True, text=True, env=env)
+    res_commit = subprocess.run(["git", "commit", "-m", "initial commit"], capture_output=True, text=True, encoding="utf-8", env=env)
     
     # If the first commit fails (e.g. because the system can't run sh hooks in this environment), skip the test.
     if res_commit.returncode != 0:
@@ -128,7 +128,7 @@ def test_installed_pre_commit_hook_blocks_and_allows_commit(tmp_path):
         f.write("print('hello')")
     subprocess.run(["git", "add", "app.py"], check=True)
     
-    res_block = subprocess.run(["git", "commit", "-m", "add app.py without updating context"], capture_output=True, text=True, env=env)
+    res_block = subprocess.run(["git", "commit", "-m", "add app.py without updating context"], capture_output=True, text=True, encoding="utf-8", env=env)
     assert res_block.returncode != 0
     
     # 5. Append to .ai/CONTEXT.md, add, commit -> passes
@@ -136,7 +136,7 @@ def test_installed_pre_commit_hook_blocks_and_allows_commit(tmp_path):
         f.write("\n- added app.py\n")
     subprocess.run(["git", "add", ".ai/CONTEXT.md"], check=True)
     
-    res_pass = subprocess.run(["git", "commit", "-m", "add app.py and update context"], capture_output=True, text=True, env=env)
+    res_pass = subprocess.run(["git", "commit", "-m", "add app.py and update context"], capture_output=True, text=True, encoding="utf-8", env=env)
     assert res_pass.returncode == 0
 
 

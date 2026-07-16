@@ -18,7 +18,7 @@ Common issues and solutions when using `ai-orch`.
 
 2. **Reinstall:**
    ```bash
-   pip install ai-orchestrator --upgrade
+   pip install -U "git+https://github.com/Darkjor/ai-orchestrator.git@master"
    ```
 
 3. **Use module form (fallback):**

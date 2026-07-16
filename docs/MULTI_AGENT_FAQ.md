@@ -638,9 +638,11 @@ jobs:
   snapshot:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v4
-      - run: pip install ai-orchestrator
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - run: pip install "git+https://github.com/Darkjor/ai-orchestrator.git@v0.3.0"
       - run: ai-orch snapshot --src src
       - name: Commit snapshot if changed
         run: |
