@@ -126,7 +126,19 @@ def resolve_action(pending_path: str, action_id: str) -> bool:
     start = next((i for i, l in enumerate(lines) if re.search(rf"### \[{re.escape(action_id)}\]", l)), -1)
     if start == -1:
         return False
-    end = next((j for j in range(start + 1, len(lines)) if _RE_HEADING.match(lines[j])), len(lines))
+    # Block end = next heading, OR a bare '---' separator, OR a '*(none)*'
+    # empty-section placeholder -- whichever comes first. Stopping only at
+    # headings let the moved block swallow the section's own separator/
+    # placeholder lines when the resolved action was the last one in its
+    # section, corrupting the file a little more on every resolve.
+    end = next(
+        (
+            j
+            for j in range(start + 1, len(lines))
+            if _RE_HEADING.match(lines[j]) or lines[j].strip() in ("---", "*(none)*")
+        ),
+        len(lines),
+    )
     block = [l.replace("**Status**: Pending", "**Status**: Done") for l in lines[start:end]]
     remaining = lines[:start] + lines[end:]
     done = next((i for i, l in enumerate(remaining) if l.strip() == "## DONE"), -1)

@@ -10,6 +10,7 @@ Output contract: success lines start with [OK], warnings with [WARN], errors
 with [ERROR] — agents parse these prefixes, and the test suite asserts them.
 """
 import datetime
+import fnmatch
 import os
 import shutil
 import subprocess
@@ -171,6 +172,13 @@ def triage():
         _run_configured_tests(test_cmd)
 
 
+# Default guard exemptions used when .ai/config.json has no "guard.exempt_paths"
+# field -- files matching one of these fnmatch globs can change without .ai/
+# also being staged. Kept here (not just in the template) so projects that
+# predate this field, or that deleted it, keep the historical behavior.
+_DEFAULT_GUARD_EXEMPT_PATHS = ["docs/*", ".gitignore", "pyproject.toml"]
+
+
 @app.command()
 def check():
     """Verify that .ai context is updated when other changes are staged."""
@@ -189,14 +197,19 @@ def check():
     if not staged_files:
         raise typer.Exit(0)
 
+    # guard.exempt_paths in .ai/config.json is a list of fnmatch globs matched
+    # against each staged path. When present it REPLACES (not extends)
+    # _DEFAULT_GUARD_EXEMPT_PATHS -- projects that set it own the full list.
+    config = load_config(os.path.join(".ai", "config.json"))
+    exempt_paths = config.get("guard", {}).get("exempt_paths", _DEFAULT_GUARD_EXEMPT_PATHS)
+
     codebase_changed = False
     ai_changed = False
     for f in staged_files:
         if f.startswith(".ai/"):
             ai_changed = True
-        elif not any(f.startswith(prefix) for prefix in [".git", "docs/"]):
-            if f not in [".gitignore", "pyproject.toml"]:
-                codebase_changed = True
+        elif not any(fnmatch.fnmatch(f, pattern) for pattern in exempt_paths):
+            codebase_changed = True
 
     if codebase_changed and not ai_changed:
         console.print(Panel(

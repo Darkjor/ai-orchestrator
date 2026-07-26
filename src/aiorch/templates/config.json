@@ -11,6 +11,9 @@
     "venv/"
   ],
   "enforce_changelog": false,
+  "guard": {
+    "exempt_paths": ["docs/*", ".gitignore", "pyproject.toml"]
+  },
   "models": {
     "default": "claude-sonnet-4-6",
     "recommendations": {

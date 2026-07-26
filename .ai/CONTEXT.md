@@ -1,7 +1,7 @@
 # Project Context — ai-orch (orquestador v1)
 
-**Last updated**: 2026-06-10
-**Updated by**: Claude Code (Fable 5)
+**Last updated**: 2026-07-26
+**Updated by**: Claude Code (Opus 5), while bootstrapping the "saas negocios chiquitos" project
 
 ---
 
@@ -15,12 +15,29 @@
   `config`, `logs`, `models`) — `main.py` is presentation-only (<500 lines)
 - `aiorch._helpers` kept as frozen backward-compat re-export shim
 - Local logging: swallowed errors go to `.ai/logs/aiorch.log` (gitignored)
-- 93 tests pass. No active alerts.
+- The guard's exempt-paths whitelist (used by `check`) is now configurable via
+  `.ai/config.json` → `guard.exempt_paths` (list of `fnmatch` globs), instead of
+  the old hardcoded `docs/`, `.gitignore`, `pyproject.toml`. When the field is
+  absent, behavior is unchanged (same default list) — existing projects aren't
+  affected. This was needed because the hardcoded whitelist blocked every commit
+  in non-Python repos (e.g. Next.js) that touch code without touching `.ai/`.
+- `resolve_action()` no longer swallows `---` separators or `*(none)*`
+  placeholders into the moved block when resolving the last action in a section
+  — it was corrupting `PENDING.md`'s structure on every resolve (visible in this
+  repo's own `.ai/PENDING.md` before the fix).
+- 96 tests pass (93 + 3 regression tests for the two fixes above). No active alerts.
 
 ---
 
 ## Most recently changed
 
+- `src/aiorch/pending.py` — `resolve_action()` block-end boundary now also stops
+  at a line that strips to exactly `---` or `*(none)*`, not just the next heading.
+- `src/aiorch/main.py` — `check`'s guard whitelist reads `guard.exempt_paths` from
+  `.ai/config.json` (fnmatch globs), falling back to the previous hardcoded list.
+- `src/aiorch/templates/config.json` — documents the new `guard.exempt_paths`
+  field with the default list as its example value.
+- `tests/test_modules.py`, `tests/test_cli.py` — regression coverage for both fixes.
 - .github/workflows/ci.yml - CI now runs on push to master (was develop-only)
 - README.md - Install section documents the real path: pip install git+...@v0.3.0 and update via pip install -U git+...@master
 - src/aiorch/ - domain-module split (10 modules), TypedDict contracts, local logging
@@ -36,7 +53,7 @@
 | Python version | 3.10+ |
 | Commands | 13 |
 | Source modules | 12 + compat shim (`src/aiorch/`) |
-| Tests | 93 (all passing) |
+| Tests | 96 (all passing) |
 | Dependencies | typer>=0.9.0, rich>=13.0.0 (supabase optional) |
 | Entry point | `ai-orch` |
 | Template files | 9 (8 copied by init; ANALYSIS.md is runtime-only) |

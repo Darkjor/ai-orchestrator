@@ -13,7 +13,7 @@ import aiorch.logs as aiorch_logs
 from aiorch.gitops import (GitCommandError, PRE_COMMIT_HOOK, find_secret_files,
                            get_staged_files, run_git_commit,
                            scan_conflict_files, write_git_hook)
-from aiorch.pending import ensure_pending_file
+from aiorch.pending import ensure_pending_file, resolve_action
 
 
 # ---------------------------------------------------------------------------
@@ -114,6 +114,59 @@ def test_ensure_pending_file_copies_template(tmp_path):
     pending.write_text(content + "\n### [DB-001] keep me\n", encoding="utf-8")
     ensure_pending_file(str(pending))
     assert "keep me" in pending.read_text(encoding="utf-8")
+
+
+def test_resolve_action_does_not_swallow_placeholder_and_separator(tmp_path):
+    """Regression: resolving the only action in a section must stop the moved
+    block at the section's own '*(none)*' placeholder / '---' separator, not
+    at the next real heading. Previously the block-end regex only matched
+    '#{1,4} ' headings, so it swallowed '*(none)*' and '---' lines that sit
+    between the resolved action and the next heading, corrupting the file a
+    little more with every `action-resolve` call."""
+    pending = tmp_path / "PENDING.md"
+    pending.write_text(
+        "# Pending Manual Actions — Test\n"
+        "\n"
+        "---\n"
+        "\n"
+        "## Database\n"
+        "\n"
+        "*(none)*\n"
+        "\n"
+        "---\n"
+        "\n"
+        "## Other\n"
+        "\n"
+        "### [ACTION-001] Manual step\n"
+        "**Status**: Pending\n"
+        "**Target**: [TBD]\n"
+        "**Discovered**: 2026-01-01\n"
+        "**Steps**: [TBD]\n"
+        "1. Run: `ai-orch action-resolve ACTION-001`\n"
+        "\n"
+        "*(none)*\n"
+        "\n"
+        "---\n"
+        "\n"
+        "## DONE\n"
+        "\n"
+        "*(none)*\n",
+        encoding="utf-8",
+    )
+
+    assert resolve_action(str(pending), "ACTION-001") is True
+    content = pending.read_text(encoding="utf-8")
+
+    other_section = content.split("## Other", 1)[1].split("## DONE", 1)[0]
+    # The section's own placeholder and separator must stay put...
+    assert "*(none)*" in other_section
+    assert "---" in other_section
+    # ...and the resolved action must have actually left the section.
+    assert "[ACTION-001]" not in other_section
+
+    done_section = content.split("## DONE", 1)[1]
+    assert "[ACTION-001]" in done_section
+    assert "**Status**: Done" in done_section
 
 
 # ---------------------------------------------------------------------------

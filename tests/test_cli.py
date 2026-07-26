@@ -288,6 +288,62 @@ def test_check_passes_with_no_lint_rules(tmp_path):
     assert result.exit_code == 0
 
 
+def test_check_guard_exempt_paths_default_blocks_non_exempt_file(tmp_path):
+    """Without guard.exempt_paths in config.json, a staged file outside the
+    hardcoded default exemptions (docs/*, .gitignore, pyproject.toml) still
+    requires a matching .ai/ update -- same behavior as before the field
+    existed."""
+    os.chdir(tmp_path)
+    subprocess.run(["git", "init"], check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test"], check=True)
+    subprocess.run(["git", "config", "user.email", "t@t.com"], check=True)
+    runner.invoke(app, ["init"])
+
+    os.makedirs("scripts", exist_ok=True)
+    with open("scripts/foo.sh", "w") as f:
+        f.write("#!/bin/sh\necho hi\n")
+
+    with open("init.txt", "w") as f:
+        f.write("init")
+    subprocess.run(["git", "add", "init.txt"], check=True)
+    subprocess.run(["git", "commit", "-m", "init"], check=True)
+
+    subprocess.run(["git", "add", "scripts/foo.sh"], check=True)
+    result = runner.invoke(app, ["check"])
+    assert result.exit_code == 1
+
+
+def test_check_guard_exempt_paths_config_overrides_default(tmp_path):
+    """guard.exempt_paths in config.json REPLACES the default exemption list
+    (it does not extend it): a glob like 'scripts/*' lets matching staged
+    files change without the .ai/ guard blocking the commit."""
+    os.chdir(tmp_path)
+    subprocess.run(["git", "init"], check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test"], check=True)
+    subprocess.run(["git", "config", "user.email", "t@t.com"], check=True)
+    runner.invoke(app, ["init"])
+
+    config_path = ".ai/config.json"
+    with open(config_path, "r", encoding="utf-8") as f:
+        config_data = json.load(f)
+    config_data["guard"] = {"exempt_paths": ["scripts/*"]}
+    with open(config_path, "w", encoding="utf-8") as f:
+        json.dump(config_data, f)
+
+    os.makedirs("scripts", exist_ok=True)
+    with open("scripts/foo.sh", "w") as f:
+        f.write("#!/bin/sh\necho hi\n")
+
+    with open("init.txt", "w") as f:
+        f.write("init")
+    subprocess.run(["git", "add", "init.txt", ".ai/config.json"], check=True)
+    subprocess.run(["git", "commit", "-m", "init"], check=True)
+
+    subprocess.run(["git", "add", "scripts/foo.sh"], check=True)
+    result = runner.invoke(app, ["check"])
+    assert result.exit_code == 0
+
+
 def test_update_replaces_section(tmp_path):
     os.chdir(tmp_path)
     runner.invoke(app, ["init"])
