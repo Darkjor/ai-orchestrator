@@ -4,6 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) — and any other AI
 when working with code in this repository. For the full module map and data contracts,
 read [docs/AI_ARCHITECTURE.md](docs/AI_ARCHITECTURE.md) first.
 
+## Session Memory (auto-loaded)
+
+This repo self-hosts its own `.ai/` orchestrator. The files below are imported so every
+session starts with the arrival protocol already applied — no manual `Read` required:
+
+@.ai/ORCHESTRATOR.md
+@.ai/CONTEXT.md
+@.ai/DECISIONS.md
+@.ai/ALERTS.md
+@.ai/WHEELS.md
+
 ## Rules
 
 - Do what has been asked; nothing more, nothing less

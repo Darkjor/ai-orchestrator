@@ -117,3 +117,32 @@
 **Rationale**: Small, isolated modules with typed contracts reduce LLM hallucination surface; a local log trail lets agents self-correct; the shim keeps every pre-v0.3 import path working (tests prove it).
 **Consequences**: New code imports domain modules directly; console output must stay ASCII ([OK]/[WARN]/[ERROR]) after the cp1252 crash found in smoke testing.
 **Revisit when**: a module approaches 500 lines or a second CLI surface (API/MCP) is added.
+
+---
+
+## [DEC-007] CLAUDE.md imports the arrival protocol instead of relying on manual Read
+
+**Date**: 2026-08-04
+**Status**: Active
+**Context**: Claude Code auto-loads `CLAUDE.md` plus any `@`-imported files into Layer 2
+("Project context") of its prompt cache at session start, `/clear`, and `/compact`. This
+repo's own `CLAUDE.md` never referenced `.ai/ORCHESTRATOR.md` — the arrival protocol
+("Minute 1 — Read the situation") only existed inside `ORCHESTRATOR.md` itself, so it only
+ran if an agent already knew to go read that file with the Read tool. An agent unfamiliar
+with the convention could skip the whole protocol. Verified against the live repo: no
+`@import` existed anywhere in `CLAUDE.md` prior to this change.
+**Decision**: Add `@.ai/ORCHESTRATOR.md`, `@.ai/CONTEXT.md`, `@.ai/DECISIONS.md`,
+`@.ai/ALERTS.md`, `@.ai/WHEELS.md` to `CLAUDE.md`, in that order (protocol first, most
+stable next, most volatile last).
+**Rationale**: This closes a protocol-discovery gap, not just a token-efficiency gap — the
+arrival protocol now runs unconditionally instead of depending on agent behavior. As a
+side effect it also moves these files into the cached, auto-reloading Layer 2 instead of
+one-off Layer 3 tool-call reads.
+**Consequences**: All five imported files count toward the loaded-context budget of every
+session, even for trivial tasks. `DECISIONS.md` is append-only (DEC-002) and was 119 lines
+at the time of this decision — the closest to the ~200-line guideline Claude Code
+recommends for adherence. `WHEELS.md` (59 lines) and `DISCUSSIONS.md` (34 lines, not
+imported) are not currently a size risk.
+**Revisit when**: `DECISIONS.md` approaches ~200 lines — archive closed decisions to a
+separate file and import only an index/summary (same pattern Claude Code uses for its own
+`MEMORY.md`), or split into `DECISIONS.md` (open/recent) + `DECISIONS_ARCHIVE.md`.
