@@ -123,7 +123,7 @@
 ## [DEC-007] CLAUDE.md imports the arrival protocol instead of relying on manual Read
 
 **Date**: 2026-08-04
-**Status**: Active
+**Status**: Active — DECISIONS.md import refined by DEC-008
 **Context**: Claude Code auto-loads `CLAUDE.md` plus any `@`-imported files into Layer 2
 ("Project context") of its prompt cache at session start, `/clear`, and `/compact`. This
 repo's own `CLAUDE.md` never referenced `.ai/ORCHESTRATOR.md` — the arrival protocol
@@ -146,3 +146,32 @@ imported) are not currently a size risk.
 **Revisit when**: `DECISIONS.md` approaches ~200 lines — archive closed decisions to a
 separate file and import only an index/summary (same pattern Claude Code uses for its own
 `MEMORY.md`), or split into `DECISIONS.md` (open/recent) + `DECISIONS_ARCHIVE.md`.
+
+---
+
+## [DEC-008] Index `.ai/DECISIONS.md` in CLAUDE.md instead of importing it in full
+
+**Date**: 2026-08-04
+**Status**: Active
+**Context**: DEC-007 imported all five `.ai/` files as-is, including the full
+`DECISIONS.md`. That file is append-only by design (DEC-002) and had already reached 119
+lines before this entry — the nearest of the five to the ~200-line adherence guideline,
+and the only one of the five with no upper bound on growth. Loading it in full on every
+session, including trivial ones that never touch architecture, was the correct default to
+ship first but not the long-term shape.
+**Decision**: Drop `@.ai/DECISIONS.md` from the `CLAUDE.md` import list. Replace it with a
+hand-maintained index (one line per decision ID + title) directly in `CLAUDE.md`. The full
+file stays on disk as the source of truth for context/rationale/consequences and is read
+on demand (Read tool) when an agent needs the reasoning behind a specific entry, not just
+the fact that it exists.
+**Rationale**: Mirrors the pattern Claude Code itself uses for `MEMORY.md` — a short,
+always-loaded index pointing at a larger on-disk record, instead of inlining the whole
+record into every session's cached context. Keeps the append-only guarantee (DEC-002)
+intact while decoupling the file's growth from what every session pays to load.
+**Consequences**: The index in `CLAUDE.md` must be updated by hand whenever a new decision
+is appended to `DECISIONS.md` — there is no tooling enforcing this yet (`ai-orch` has no
+command that touches `CLAUDE.md`). An agent that only reads the auto-loaded index sees
+titles, not rationale; it must explicitly `Read .ai/DECISIONS.md` before revisiting or
+citing the reasoning behind a past decision.
+**Revisit when**: the manual index drifts from `DECISIONS.md` (a decision gets added
+without an index entry), or a second file needs the same treatment.

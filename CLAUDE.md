@@ -11,9 +11,20 @@ session starts with the arrival protocol already applied — no manual `Read` re
 
 @.ai/ORCHESTRATOR.md
 @.ai/CONTEXT.md
-@.ai/DECISIONS.md
 @.ai/ALERTS.md
 @.ai/WHEELS.md
+
+**Decisions index** (`.ai/DECISIONS.md` is append-only and not auto-loaded — read it
+directly when you need the full context/rationale/consequences behind one of these):
+
+- DEC-001 — Typer over argparse/click for the CLI framework
+- DEC-002 — Markdown files over a database for `.ai/` context
+- DEC-003 — Pre-commit hook enforces `.ai/` update on code changes
+- DEC-004 — Merge conflict detection uses line-start regex, not substring match
+- DEC-005 — Architecture review: scalability bottlenecks & technical debt (findings only)
+- DEC-006 — v0.3.0 domain-module split for agentic maintainability
+- DEC-007 — CLAUDE.md imports the arrival protocol instead of relying on manual Read
+- DEC-008 — `.ai/DECISIONS.md` itself is indexed here, not imported in full (this section)
 
 ## Rules
 
