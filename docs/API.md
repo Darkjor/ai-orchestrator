@@ -5,7 +5,7 @@ This guide covers programmatic usage of `ai-orch` in Python scripts and custom e
 ## Installation
 
 ```bash
-pip install ai-orchestrator
+pip install "git+https://github.com/Darkjor/ai-orchestrator.git@v0.3.0"
 ```
 
 ## Helper Functions
@@ -531,11 +531,10 @@ alerts = parse_alerts(".ai/ALERTS.md")
 
 ## Contributing
 
-To add a new helper function:
+To add a new capability, follow the domain-module checklist in
+[docs/AI_ARCHITECTURE.md §8](AI_ARCHITECTURE.md#8-how-to-extend-checklist-for-agents):
+put the logic in the matching domain module (or a new one), wire a thin
+`@app.command()` wrapper in `main.py`, and add tests. `src/aiorch/_helpers.py`
+is a frozen backward-compat re-export shim — it never gets new logic.
 
-1. Add function to `src/aiorch/_helpers.py`
-2. Add tests to `tests/test_cli.py`
-3. Document it in this API guide
-4. Submit a PR
-
-See the [GitHub repository](https://github.com/yourorg/ai-orchestrator) for contribution guidelines.
+See the [GitHub repository](https://github.com/Darkjor/ai-orchestrator) for contribution guidelines.

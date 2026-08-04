@@ -1,5 +1,8 @@
 # ai-orch v0.2.0
 
+> Historical release notes for v0.2.0. For current install instructions and
+> the full 13-command surface, see [README.md](README.md).
+
 Production-ready release of the AI Orchestrator CLI — a global, tech-agnostic
 framework for keeping AI coding agents aligned on shared project context.
 
@@ -16,8 +19,8 @@ requires no migration.
   running the full handoff wizard.
 - **`action-resolve`** — mark a pending action as resolved and clear it from
   `.ai/PENDING.md`.
-- **`snapshot`** — capture a point-in-time snapshot of the current `.ai/`
-  context state.
+- **`snapshot`** — inject an AST symbol snapshot of `src/` into
+  `.ai/CONTEXT.md`.
 - **`update`** — non-interactive replacement of a named section in a context
   file (scriptable alternative to the `handoff` wizard).
 
@@ -57,7 +60,4 @@ No breaking changes. Existing `.ai/` folders continue to work unchanged; run
 
 ## Install
 
-```bash
-pip install ai-orchestrator
-ai-orch --help
-```
+See [README.md](README.md) for current install instructions.

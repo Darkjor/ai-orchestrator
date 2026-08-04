@@ -61,6 +61,8 @@ ai-orch handoff
 | `ai-orch export` | Bundles all `.ai/` files into one Markdown document (stdout or `--out`) |
 | `ai-orch observe` | Shows recent agent-run metrics from the optional Supabase store |
 
+`ai-orch` itself only records `latency_ms` and `status` for `analyze` and `qa` (including `override_approved` on a human override). The `tokens_in`/`tokens_out`/`cost_usd`/`eval_score` columns are populated by your own agents calling `SupabaseLogger.log_run(...)` directly — `observe` just renders whatever the table holds.
+
 * Para documentación detallada y en español, consulta el [Manual de Usuario](docs/MANUAL.md).
 * Architecture and data contracts for contributors (human or AI): [docs/AI_ARCHITECTURE.md](docs/AI_ARCHITECTURE.md).
 
@@ -123,11 +125,11 @@ jobs:
   triage:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
-      - run: pip install ai-orchestrator
+      - run: pip install "git+https://github.com/Darkjor/ai-orchestrator.git@v0.3.0"
       - run: ai-orch triage
       - run: ai-orch check  # Verify .ai/ was updated with code changes
 ```

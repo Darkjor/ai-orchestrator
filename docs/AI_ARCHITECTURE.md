@@ -204,7 +204,7 @@ Frozen public surfaces (tests import them — breaking these breaks users):
 
 1. `aiorch.main.app` (entry point + every test)
 2. `aiorch._helpers.<anything>` including underscore aliases (`_next_action_id`, ...)
-3. `aiorch.main.get_logger` (patched by observability tests)
+3. `aiorch.main.get_logger` (patched by the `observe` CLI tests in `tests/test_cli.py`)
 
 ---
 
