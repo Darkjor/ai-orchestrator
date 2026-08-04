@@ -37,6 +37,7 @@
 - (none)
 
 **Most recently changed:**
+- .ai/ORCHESTRATOR.md - Close the DEC-008 drift risk: "Before You Leave" checklist now tells agents to add a one-line entry to CLAUDE.md's decisions index whenever they append to DECISIONS.md.
 - CLAUDE.md - Replace the `@.ai/DECISIONS.md` import with a hand-maintained decisions index (DECISIONS.md stays on-disk, read on demand) so its append-only growth doesn't load into every session (see DEC-008).
 - CLAUDE.md - Import ORCHESTRATOR.md/CONTEXT.md/DECISIONS.md/ALERTS.md/WHEELS.md via `@` so the arrival protocol auto-loads into every session instead of depending on an agent manually reading ORCHESTRATOR.md (see DEC-007).
 - docs/MANUAL.md - Create user manual in Spanish.

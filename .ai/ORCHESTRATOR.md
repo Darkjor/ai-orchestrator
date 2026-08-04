@@ -44,7 +44,7 @@ Before ending your session, update:
 | `.ai/CONTEXT.md` | Current State + Most Recently Changed |
 | `.ai/ALERTS.md` | New fires discovered, resolved alerts |
 | `.ai/DISCUSSIONS.md` | Handoff thread or open debate with your progress / questions |
-| `.ai/DECISIONS.md` | Any architectural decision you made |
+| `.ai/DECISIONS.md` | Any architectural decision you made — **and** add its one-line entry to the "Decisions index" in `CLAUDE.md` (that index is hand-maintained, not auto-generated; DEC-008) |
 
 **If you run out of tokens mid-task**: update CONTEXT.md with exactly where you stopped.
 The next AI will pick up from there.
