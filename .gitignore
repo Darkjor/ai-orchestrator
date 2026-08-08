@@ -11,8 +11,9 @@ dist/
 build/
 *.egg-info/
 
-# aiorch local runtime logs
-.ai/logs/
+# .ai/ here is the host workspace's context (e.g. grupoveq's), kept local-only,
+# not part of this tool's own repo history
+.ai/
 
 # Ruflo / claude-flow runtime
 .claude-flow/
