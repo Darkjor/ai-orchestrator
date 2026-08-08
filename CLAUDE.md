@@ -4,18 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) — and any other AI
 when working with code in this repository. For the full module map and data contracts,
 read [docs/AI_ARCHITECTURE.md](docs/AI_ARCHITECTURE.md) first.
 
-## Session Memory (auto-loaded)
+## Session Memory
 
-This repo self-hosts its own `.ai/` orchestrator. The files below are imported so every
-session starts with the arrival protocol already applied — no manual `Read` required:
+This repo no longer self-hosts its own `.ai/` folder (removed 2026-08-07). When nested
+inside another project's workspace, its context lives consolidated in that project's own
+`.ai/` folder — e.g. `../.ai/AI-ORCHESTRATOR.md` when nested under a host project, per the
+author's decision that a workspace should have a single `.ai/` folder rather than one per
+nested repo. If running this repo standalone (not nested), there is currently no `.ai/`
+context to auto-load — read `docs/AI_ARCHITECTURE.md` and recent git history instead.
 
-@.ai/ORCHESTRATOR.md
-@.ai/CONTEXT.md
-@.ai/ALERTS.md
-@.ai/WHEELS.md
-
-**Decisions index** (`.ai/DECISIONS.md` is append-only and not auto-loaded — read it
-directly when you need the full context/rationale/consequences behind one of these):
+**Decisions index** (full context/rationale/consequences behind each of these now lives in
+git history — `git log --all --oneline -- .ai/DECISIONS.md` — and in a condensed form in the
+host workspace's `.ai/AI-ORCHESTRATOR.md` when nested):
 
 - DEC-001 — Typer over argparse/click for the CLI framework
 - DEC-002 — Markdown files over a database for `.ai/` context
