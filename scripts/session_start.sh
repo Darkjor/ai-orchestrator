@@ -63,9 +63,11 @@ if pending:
 
 out.append("")
 out.append("Read .ai/CONTEXT.md for where the last session stopped and .ai/WHEELS.md")
-out.append("for approaches already ruled out. Use /ai-orch:arrival for the full protocol")
-out.append("and /ai-orch:handoff before you finish. Update .ai/ before committing —")
-out.append("the pre-commit guard blocks code commits that leave the context stale.")
+out.append("for approaches already ruled out. Use /ai-orch:arrival for the full protocol.")
+out.append("")
+out.append("Before you finish: `ai-orch sync --note \"what you did, where you stopped\"`.")
+out.append("It never prompts and reads the changed files from git. The pre-commit guard")
+out.append("blocks code commits that leave .ai/ stale, so this is not optional.")
 
 print("\n".join(out))
 PYEOF

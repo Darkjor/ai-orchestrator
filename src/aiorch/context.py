@@ -61,6 +61,34 @@ def update_section(filepath: str, section: str, value: str) -> bool:
     return True
 
 
+def read_section(filepath: str, section: str) -> str:
+    """Return the body under a Markdown heading, or "" if absent.
+
+    The read counterpart of update_section — same case-insensitive, prefix
+    based matching, so callers that can write a section can also read it back.
+    Used by `ai-orch brief` to lift the human-written state out of CONTEXT.md
+    without re-implementing the heading rules.
+    """
+    if not os.path.exists(filepath):
+        return ""
+    with open(filepath, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+    heading_idx = -1
+    for i, line in enumerate(lines):
+        stripped = line.strip().lstrip("#").strip().lower()
+        if stripped == section.lower() or stripped.startswith(section.lower()):
+            heading_idx = i
+            break
+    if heading_idx == -1:
+        return ""
+    end_idx = len(lines)
+    for j in range(heading_idx + 1, len(lines)):
+        if _RE_HEADING.match(lines[j]) or lines[j].strip() == "---":
+            end_idx = j
+            break
+    return "".join(lines[heading_idx + 1:end_idx]).strip()
+
+
 def update_context(context_path: str, today_str: str, accomplishments: str, changed_files: str) -> bool:
     """Update CONTEXT.md date stamp and inject accomplishment/changed bullets.
 

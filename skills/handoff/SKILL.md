@@ -2,7 +2,7 @@
 name: handoff
 description: Close an ai-orch session cleanly — write what you did and where you stopped into .ai/CONTEXT.md, log new blockers as alerts, record architecture decisions, file manual DB/infra actions in PENDING.md, and commit so the next agent (or the next you, after a compaction) can resume without re-deriving anything.
 argument-hint: "[optional: summary of what you did]"
-allowed-tools: Bash(ai-orch update:*), Bash(ai-orch action-add:*), Bash(ai-orch action-resolve:*), Bash(ai-orch snapshot:*), Bash(ai-orch triage:*), Bash(git status:*), Bash(git diff:*), Bash(git add:*), Bash(git commit:*), Read, Glob, Grep
+allowed-tools: Bash(ai-orch sync:*), Bash(ai-orch update:*), Bash(ai-orch action-add:*), Bash(ai-orch action-resolve:*), Bash(ai-orch snapshot:*), Bash(ai-orch triage:*), Bash(git status:*), Bash(git diff:*), Bash(git add:*), Bash(git commit:*), Read, Glob, Grep
 ---
 
 # Session handoff
@@ -13,9 +13,19 @@ of room mid-task.
 
 $ARGUMENTS
 
-**Use `ai-orch update`, not `ai-orch handoff`.** The `handoff` command is an
-interactive wizard that blocks on stdin prompts — it will hang you. `update` is the
-non-interactive writer built for agents.
+**Use `ai-orch sync`, not `ai-orch handoff`.** The `handoff` command is an
+interactive wizard that blocks on stdin prompts — it will hang you. `sync` is the
+non-interactive path built for agents: it reads the changed files from git itself,
+so the only thing you have to supply is why.
+
+```bash
+ai-orch sync --note "<what you did and exactly where you stopped>"
+```
+
+That one command stamps the date, prepends your note to `## Current State`,
+replaces `## Most recently changed` with the real file list from git, and
+refreshes the symbol snapshot. Reach for `ai-orch update` below only when you
+need to write a specific section by hand.
 
 ## 1. Gather what actually changed
 
@@ -26,11 +36,13 @@ git diff --stat
 
 Base the handoff on the real diff, not on your memory of the conversation.
 
-## 2. Write the state
+## 2. Write anything sync cannot infer
+
+`sync` covers the common case. Use `update` for a section it does not touch, or
+to rewrite `## Current State` wholesale rather than prepending to it:
 
 ```bash
 ai-orch update -s "Current State" -v "- <what works now>\n- <what is broken>\n- <exactly where you stopped>"
-ai-orch update -s "Most recently changed" -v "- path/to/file.py: <what changed and why>"
 ```
 
 `update` **replaces** the section. Read `.ai/CONTEXT.md` first if you mean to keep what
@@ -77,12 +89,8 @@ written anywhere else in the file are silently ignored.
 
 ## 4. Refresh the symbol map
 
-```bash
-ai-orch snapshot
-```
-
-Only if you added or removed top-level functions or classes. The post-commit hook does
-this automatically when hooks are installed.
+`ai-orch sync` already did this. Run `ai-orch snapshot` on its own only if you
+skipped `sync`; the post-commit hook also does it when hooks are installed.
 
 ## 5. Commit
 

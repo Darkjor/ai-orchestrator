@@ -182,3 +182,55 @@ def write_git_hook(hook_dir: str, name: str, content: str) -> tuple[str, str | N
     except OSError as exc:
         return path, str(exc)
     return path, None
+
+
+def get_recent_changed_files(limit: int = 25) -> list[str]:
+    """Return the files this session touched, for a non-interactive handoff.
+
+    WHY the fallback: `ai-orch sync` is meant to run at the END of a session,
+    which may be either side of a commit. Uncommitted work is the better
+    answer when it exists (it is what the agent is about to hand over); once
+    the agent has already committed, the working tree is clean and the last
+    commit's files are the only remaining evidence of what happened.
+
+    Raises GitCommandError so callers can distinguish "nothing changed" (an
+    empty list) from "git is unavailable".
+    """
+    try:
+        # -uall expands untracked directories to individual files; the default
+        # collapses a wholly-new directory to "src/", which tells a reader far
+        # less than the file names inside it.
+        status = subprocess.run(
+            ["git", "status", "--porcelain", "-uall"],
+            capture_output=True, text=True, check=True, timeout=10,
+        )
+    except (subprocess.CalledProcessError, OSError, subprocess.TimeoutExpired) as exc:
+        raise GitCommandError(str(exc)) from exc
+
+    files: list[str] = []
+    for line in status.stdout.splitlines():
+        # Porcelain v1: 2 status chars, a space, then the path. Renames read
+        # "R  old -> new"; the new name is the one worth reporting.
+        path = line[3:].strip() if len(line) > 3 else ""
+        if " -> " in path:
+            path = path.split(" -> ", 1)[1]
+        if path and not path.startswith(".ai/"):
+            files.append(path.strip('"'))
+
+    if not files:
+        try:
+            res = subprocess.run(
+                ["git", "show", "--name-only", "--pretty=format:", "HEAD"],
+                capture_output=True, text=True, check=True, timeout=10,
+            )
+            files = [
+                l.strip() for l in res.stdout.splitlines()
+                if l.strip() and not l.strip().startswith(".ai/")
+            ]
+        except (subprocess.CalledProcessError, OSError, subprocess.TimeoutExpired) as exc:
+            # An empty repo has no HEAD — that is "nothing to report", not a
+            # failure worth propagating.
+            get_local_logger().debug("get_recent_changed_files: no HEAD: %s", exc)
+            return []
+
+    return sorted(dict.fromkeys(files))[:limit]

@@ -49,7 +49,7 @@ hand — `ai-orch init` copies templates whose exact headings are parsing contra
 ```
 ARRIVE  →  ai-orch triage        (alerts, pending, conflicts, secrets, tests)
 WORK    →  ai-orch update / action-add   (record as you go, not at the end)
-LEAVE   →  ai-orch handoff       (or `update`, then commit)
+LEAVE   →  ai-orch sync --note "..."     (agents)  |  ai-orch handoff (humans)
 ```
 
 `/ai-orch:arrival` and `/ai-orch:handoff` run the two rituals. This skill is the
@@ -61,8 +61,11 @@ reference behind them.
 | --- | --- |
 | `ai-orch init` | First time in a project — writes 8 template files into `.ai/` |
 | `ai-orch triage` | Start of every session — the arrival brief |
+| `ai-orch sync [--note "..."]` | End of a session — **the agent path**. Derives changed files from git, never prompts |
 | `ai-orch handoff` | End of a session — **interactive**, prompts on stdin |
-| `ai-orch update -s SECTION -v VALUE [-f FILE]` | Non-interactive section replace — **the agent-friendly writer** |
+| `ai-orch update -s SECTION -v VALUE [-f FILE]` | Non-interactive replace of one specific section |
+| `ai-orch brief [--out FILE]` | Render `.ai/` as one human-readable status page |
+| `ai-orch ide-install` | Write `AGENTS.md` + `.agents/rules/` so other IDEs learn the protocol |
 | `ai-orch action-add TITLE --type db\|infra\|other [--sql ...] [--steps ...]` | You found work only a human can do |
 | `ai-orch action-resolve ID` | That work got done |
 | `ai-orch snapshot [--src DIR]` | Refresh the AST symbol map in `CONTEXT.md` |
@@ -76,8 +79,16 @@ Every command prints `[OK]` / `[WARN]` / `[ERROR]` prefixes. Parse those, not pr
 
 ## Writing context as an agent
 
-**Use `update`, never `handoff`, when running unattended.** `handoff` is an
-interactive wizard: it blocks on `typer.prompt` and will hang a non-interactive run.
+**Use `sync` or `update`, never `handoff`, when running unattended.** `handoff` is
+an interactive wizard: it blocks on `typer.prompt` and will hang a non-interactive run.
+
+The one-command departure — git supplies the file list, you supply the reason:
+
+```bash
+ai-orch sync --note "Refactored auth; stopped at JWT refresh caching"
+```
+
+For writing one specific section by hand:
 
 ```bash
 ai-orch update -s "Current State" -v "- Refactored auth\n- Stopped at JWT refresh caching"
@@ -152,6 +163,20 @@ PENDING ──qa, metrics match──→ QA_APPROVED
 
 `qa` prompts for the override, so it also blocks unattended. Only P0 count and pending
 count are cross-checked — test and git counts drift legitimately between the two runs.
+
+## Other IDEs, and humans reading the repo
+
+`ai-orch ide-install` writes an `AGENTS.md` (read automatically by Antigravity,
+Cursor and Copilot) and an Antigravity workspace rule at
+`.agents/rules/ai-orch.md` with `trigger: always_on`, so an agent in those tools
+learns the protocol with no plugin installed. Both are written as a managed block
+between `<!-- ai-orch:start -->` markers — regenerating never touches text a human
+wrote around it.
+
+`ai-orch brief` renders the live `.ai/` state as one page written for a person:
+what is happening, what is broken, what needs a human, where the detail lives.
+Point it somewhere discoverable (`--out STATUS.md`) for teammates who browse the
+repo in an IDE and will never run the CLI.
 
 ## Handing off to a non-Claude model
 

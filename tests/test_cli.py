@@ -1093,3 +1093,127 @@ def test_qa_override_logs_run(tmp_path):
     _, kwargs = mock_logger.log_run.call_args
     assert kwargs.get("status") == "override_approved"
 
+
+
+# ---------------------------------------------------------------------------
+# sync / brief / ide-install — the non-interactive + cross-IDE surface
+# ---------------------------------------------------------------------------
+
+def _git_project(tmp_path):
+    """Init a real git repo with .ai/ and one tracked source file."""
+    os.chdir(tmp_path)
+    subprocess.run(["git", "init"], check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "t@example.com"], check=True)
+    subprocess.run(["git", "config", "user.name", "T"], check=True)
+    runner.invoke(app, ["init"])
+    os.makedirs("src", exist_ok=True)
+    with open("src/auth.py", "w", encoding="utf-8") as f:
+        f.write("def login():\n    pass\n")
+
+
+def test_sync_records_git_changes_without_prompting(tmp_path):
+    _git_project(tmp_path)
+    # No stdin supplied at all: sync must never block on input.
+    result = runner.invoke(app, ["sync", "--note", "Stopped at JWT refresh"])
+    assert result.exit_code == 0, result.output
+    assert "[OK]" in result.output
+    content = open(".ai/CONTEXT.md", encoding="utf-8").read()
+    assert "Stopped at JWT refresh" in content
+    assert "src/auth.py" in content          # derived from git, never typed
+    assert "## Codebase Snapshot" in content # snapshot refreshed
+
+
+def test_sync_warns_when_note_omitted(tmp_path):
+    _git_project(tmp_path)
+    result = runner.invoke(app, ["sync"])
+    assert result.exit_code == 0
+    assert "[WARN]" in result.output
+    assert "only you know WHY" in result.output
+
+
+def test_sync_excludes_ai_folder_from_changed_files(tmp_path):
+    _git_project(tmp_path)
+    runner.invoke(app, ["sync", "--note", "n"])
+    changed = open(".ai/CONTEXT.md", encoding="utf-8").read()
+    changed = changed.split("**Most recently changed:**")[1].split("---")[0]
+    assert ".ai/" not in changed
+
+
+def test_sync_falls_back_to_last_commit_when_tree_clean(tmp_path):
+    _git_project(tmp_path)
+    subprocess.run(["git", "add", "src/auth.py"], check=True)
+    subprocess.run(["git", "commit", "-m", "feat: auth"], check=True, capture_output=True)
+    result = runner.invoke(app, ["sync", "--note", "after commit"])
+    assert result.exit_code == 0
+    assert "src/auth.py" in open(".ai/CONTEXT.md", encoding="utf-8").read()
+
+
+def test_sync_requires_ai_folder(tmp_path):
+    os.chdir(tmp_path)
+    result = runner.invoke(app, ["sync"])
+    assert result.exit_code == 1
+    assert "Error" in result.output
+
+
+def test_brief_renders_live_state(tmp_path):
+    _git_project(tmp_path)
+    runner.invoke(app, ["action-add", "Add index", "--type", "db"])
+    result = runner.invoke(app, ["brief"])
+    assert result.exit_code == 0
+    assert "project status" in result.output
+    assert "What needs a person" in result.output
+    assert "DB-001" in result.output
+
+
+def test_brief_writes_to_out_file(tmp_path):
+    _git_project(tmp_path)
+    result = runner.invoke(app, ["brief", "--out", "STATUS.md"])
+    assert result.exit_code == 0
+    assert "[OK]" in result.output
+    assert "project status" in open("STATUS.md", encoding="utf-8").read()
+
+
+def test_brief_flags_p0_in_headline(tmp_path):
+    _git_project(tmp_path)
+    from aiorch.alerts import insert_alert
+    insert_alert(".ai/ALERTS.md", {"id": "ALERT-001", "title": "Boom", "severity": "P0"}, "2026-08-31")
+    result = runner.invoke(app, ["brief"])
+    assert "blocking issue" in result.output
+    assert "ALERT-001" in result.output
+
+
+def test_ide_install_creates_agents_md_and_antigravity_rule(tmp_path):
+    _git_project(tmp_path)
+    result = runner.invoke(app, ["ide-install"])
+    assert result.exit_code == 0
+    agents = open("AGENTS.md", encoding="utf-8").read()
+    assert "ai-orch:start" in agents and "ai-orch:end" in agents
+    assert ".ai/CONTEXT.md" in agents
+    rule = open(os.path.join(".agents", "rules", "ai-orch.md"), encoding="utf-8").read()
+    assert rule.startswith("---\ntrigger: always_on")
+
+
+def test_ide_install_preserves_hand_written_agents_md(tmp_path):
+    _git_project(tmp_path)
+    with open("AGENTS.md", "w", encoding="utf-8") as f:
+        f.write("# Agent instructions\n\n## House rules\n- Never touch billing/.\n")
+    runner.invoke(app, ["ide-install"])
+    # Regenerating must not eat the user's own text, before or after our block.
+    runner.invoke(app, ["ide-install"])
+    agents = open("AGENTS.md", encoding="utf-8").read()
+    assert "Never touch billing/." in agents
+    assert agents.count("ai-orch:start") == 1
+
+
+def test_ide_install_no_antigravity_flag(tmp_path):
+    _git_project(tmp_path)
+    result = runner.invoke(app, ["ide-install", "--no-antigravity"])
+    assert result.exit_code == 0
+    assert os.path.exists("AGENTS.md")
+    assert not os.path.exists(os.path.join(".agents", "rules", "ai-orch.md"))
+
+
+def test_ide_install_requires_ai_folder(tmp_path):
+    os.chdir(tmp_path)
+    result = runner.invoke(app, ["ide-install"])
+    assert result.exit_code == 1

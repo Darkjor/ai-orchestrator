@@ -7,6 +7,7 @@ external code (tests, user scripts, older agents' notes) imports from
     aiorch.alerts     — ALERTS.md parse/insert/IDs
     aiorch.pending    — PENDING.md parse/insert/resolve/IDs
     aiorch.context    — CONTEXT.md sections, snapshot, export bundle
+    aiorch.portability— AGENTS.md / .agents rules, human-readable brief
     aiorch.decisions  — DECISIONS.md append/count
     aiorch.analysis   — analyze/qa metrics pipeline
     aiorch.gitops     — git subprocess wrappers + hook scripts
@@ -41,6 +42,7 @@ from aiorch.context import (
     inject_snapshot,
     update_context,
     update_section,
+    read_section,
 )
 from aiorch.decisions import append_decision, count_decisions
 from aiorch.gitops import (
@@ -50,6 +52,13 @@ from aiorch.gitops import (
     has_merge_conflicts,
     run_git_commit,
     scan_conflict_files,
+    get_recent_changed_files,
+)
+from aiorch.portability import (
+    AGENTS_MD_BLOCK,
+    ANTIGRAVITY_RULE,
+    render_brief,
+    write_managed_block,
 )
 from aiorch.lint import check_staged_lint, parse_lint_rules
 from aiorch.pending import (
@@ -70,7 +79,16 @@ _resolve_action = resolve_action
 _has_merge_conflicts = has_merge_conflicts
 
 __all__ = [
+    "AGENTS_MD_BLOCK",
+    "ANTIGRAVITY_RULE",
     "GitCommandError",
+    "_all_alert_ids",
+    "_has_merge_conflicts",
+    "_insert_action",
+    "_insert_alert",
+    "_next_action_id",
+    "_next_alert_id",
+    "_resolve_action",
     "all_alert_ids",
     "append_decision",
     "bundle_context",
@@ -80,6 +98,7 @@ __all__ = [
     "ensure_pending_file",
     "find_secret_files",
     "generate_snapshot",
+    "get_recent_changed_files",
     "get_staged_files",
     "has_merge_conflicts",
     "inject_snapshot",
@@ -93,6 +112,8 @@ __all__ = [
     "parse_lint_rules",
     "parse_pending",
     "qa_cross_check",
+    "read_section",
+    "render_brief",
     "resolve_action",
     "run_git_commit",
     "scan_conflict_files",
@@ -100,12 +121,5 @@ __all__ = [
     "update_context",
     "update_section",
     "write_analysis_report",
-    # legacy aliases
-    "_all_alert_ids",
-    "_next_alert_id",
-    "_insert_alert",
-    "_next_action_id",
-    "_insert_action",
-    "_resolve_action",
-    "_has_merge_conflicts",
+    "write_managed_block",
 ]

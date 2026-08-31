@@ -394,3 +394,87 @@ def test_load_config_corrupt_returns_empty_and_logs(tmp_path, caplog):
     assert config == {}
     assert any("unreadable" in record.message for record in caplog.records)
 
+
+
+# ---------------------------------------------------------------------------
+# portability.py tests
+# ---------------------------------------------------------------------------
+
+def test_write_managed_block_reports_created_updated_unchanged(tmp_path):
+    from aiorch.portability import write_managed_block, MANAGED_START
+    target = tmp_path / "AGENTS.md"
+    assert write_managed_block(str(target), "hello", title="T") == "created"
+    assert write_managed_block(str(target), "hello", title="T") == "unchanged"
+    assert write_managed_block(str(target), "goodbye", title="T") == "updated"
+    text = target.read_text(encoding="utf-8")
+    assert "goodbye" in text and "hello" not in text
+    assert text.count(MANAGED_START) == 1
+
+
+def test_write_managed_block_appends_to_unmarked_file(tmp_path):
+    from aiorch.portability import write_managed_block
+    target = tmp_path / "AGENTS.md"
+    target.write_text("# Mine\n\nHand-written rules.\n", encoding="utf-8")
+    assert write_managed_block(str(target), "generated") == "updated"
+    text = target.read_text(encoding="utf-8")
+    assert "Hand-written rules." in text and "generated" in text
+
+
+def test_write_managed_block_creates_parent_directory(tmp_path):
+    from aiorch.portability import write_managed_block
+    target = tmp_path / "deep" / "nested" / "rules.md"
+    assert write_managed_block(str(target), "x") == "created"
+    assert target.exists()
+
+
+def test_render_brief_on_empty_project(tmp_path):
+    from aiorch.portability import render_brief
+    (tmp_path / ".ai").mkdir()
+    brief = render_brief(str(tmp_path / ".ai"), {"project_name": "demo"}, "2026-08-31")
+    assert "demo — project status" in brief
+    assert "No open blockers." in brief
+    assert "Nothing waiting." in brief
+
+
+def test_render_brief_orders_alerts_by_severity(tmp_path):
+    from aiorch.alerts import insert_alert
+    from aiorch.portability import render_brief
+    import shutil, os as _os
+    ai = tmp_path / ".ai"
+    ai.mkdir()
+    tpl = _os.path.join(_os.path.dirname(__import__("aiorch").__file__), "templates", "ALERTS.md")
+    shutil.copy(tpl, ai / "ALERTS.md")
+    p = str(ai / "ALERTS.md")
+    insert_alert(p, {"id": "ALERT-001", "title": "low", "severity": "P2"}, "2026-08-31")
+    insert_alert(p, {"id": "ALERT-002", "title": "fire", "severity": "P0"}, "2026-08-31")
+    brief = render_brief(str(ai), {}, "2026-08-31")
+    assert brief.index("ALERT-002") < brief.index("ALERT-001")
+    assert "blocking issue" in brief
+
+
+def test_antigravity_rule_has_valid_frontmatter():
+    from aiorch.portability import ANTIGRAVITY_RULE
+    assert ANTIGRAVITY_RULE.startswith("---\n")
+    fm = ANTIGRAVITY_RULE.split("---", 2)[1]
+    assert "trigger: always_on" in fm
+    assert "description:" in fm
+    # Antigravity caps each rules file at 12,000 characters.
+    assert len(ANTIGRAVITY_RULE) < 12000
+
+
+def test_read_section_roundtrips_with_update_section(tmp_path):
+    from aiorch.context import read_section, update_section
+    f = tmp_path / "CONTEXT.md"
+    f.write_text("## Current State (updated: x)\n\nold\n\n## Next\n\nkeep\n", encoding="utf-8")
+    assert update_section(str(f), "Current State", "fresh value")
+    assert read_section(str(f), "Current State") == "fresh value"
+    assert read_section(str(f), "Next") == "keep"
+    assert read_section(str(f), "Nonexistent") == ""
+
+
+def test_get_recent_changed_files_raises_without_git(tmp_path):
+    import os as _os
+    from aiorch.gitops import GitCommandError, get_recent_changed_files
+    _os.chdir(tmp_path)
+    with pytest.raises(GitCommandError):
+        get_recent_changed_files()

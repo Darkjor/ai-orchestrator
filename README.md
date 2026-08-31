@@ -26,6 +26,30 @@ cd ai-orchestrator
 pip install -e .
 ```
 
+### Works in any IDE
+
+`ai-orch` is a CLI and a folder of Markdown, so it works anywhere. Two commands make
+that explicit:
+
+```bash
+ai-orch ide-install     # AGENTS.md + .agents/rules/ai-orch.md
+ai-orch brief --out STATUS.md
+```
+
+`ide-install` writes an `AGENTS.md` — read automatically by **Google Antigravity**
+(1.20.5+), Cursor and Copilot — plus an Antigravity workspace rule with
+`trigger: always_on`, that IDE's nearest equivalent to a session-start hook. Both are
+written as a managed block between `<!-- ai-orch:start -->` markers, so regenerating
+never touches text you wrote around it.
+
+`brief` renders the live `.ai/` state as one page aimed at **humans**: what is
+happening now, what is broken, what needs a person, where the detail lives. Point it at
+a discoverable path and teammates get the project's status in their IDE's Markdown
+preview without ever running the CLI.
+
+The git hooks are IDE-agnostic by construction — they run at `git commit`, so the guard
+works identically in Antigravity, VS Code, or a bare terminal.
+
 ### Claude Code plugin (optional)
 
 The repo doubles as its own Claude Code marketplace. Installing the plugin teaches
@@ -55,8 +79,12 @@ ai-orch triage
 # 3. Install the pre-commit guard
 ai-orch hook-install
 
-# 4. At the end of each session, hand off
-ai-orch handoff
+# 4. Teach other IDEs the protocol (Antigravity, Cursor, Copilot)
+ai-orch ide-install
+
+# 5. At the end of each session, hand off
+ai-orch handoff                          # human at the keyboard
+ai-orch sync --note "where you stopped"  # agent, unattended
 ```
 
 ## Commands
@@ -68,6 +96,7 @@ ai-orch handoff
 | `ai-orch check` | Pre-commit guard: fails if code changed but `.ai/` wasn't updated, or WHEELS.md lint rules are violated |
 | `ai-orch hook-install` | Installs the pre-commit guard and a post-commit snapshot refresher |
 | `ai-orch handoff` | Interactive wizard to update `.ai/` docs and commit (`--snapshot` embeds a symbol map) |
+| `ai-orch sync` | **Non-interactive handoff for agents** — you pass `--note` (the why), git supplies the changed files (the what) |
 | `ai-orch snapshot` | Injects an AST symbol snapshot of `src/` into `CONTEXT.md` |
 | `ai-orch update` | Non-interactive section replace in any `.ai/` file (for agents) |
 | `ai-orch action-add` | Records a manual action (DB/infra/other) in `PENDING.md` |
@@ -75,6 +104,8 @@ ai-orch handoff
 | `ai-orch analyze` | Writes a verifiable metrics report to `.ai/ANALYSIS.md` |
 | `ai-orch qa` | Cross-checks the analysis against live state; escalates discrepancies |
 | `ai-orch export` | Bundles all `.ai/` files into one Markdown document (stdout or `--out`) |
+| `ai-orch brief` | Renders `.ai/` as one human-readable status page for teammates browsing the repo |
+| `ai-orch ide-install` | Writes `AGENTS.md` + `.agents/rules/` so Antigravity, Cursor and Copilot learn the protocol |
 | `ai-orch observe` | Shows recent agent-run metrics from the optional Supabase store |
 
 `ai-orch` itself only records `latency_ms` and `status` for `analyze` and `qa` (including `override_approved` on a human override). The `tokens_in`/`tokens_out`/`cost_usd`/`eval_score` columns are populated by your own agents calling `SupabaseLogger.log_run(...)` directly — `observe` just renders whatever the table holds.
@@ -103,17 +134,15 @@ When Agent A runs out of tokens mid-task, Agent B takes over cleanly:
 
 **Agent A (ending session):**
 ```bash
-# Update CONTEXT.md with exactly where work stopped
-ai-orch update --section "Current State" --value "- Refactored authentication module; stopped at JWT refresh token caching"
+# One command: you supply the why, git supplies the what.
+# `sync` never prompts — unlike `handoff`, which is an interactive wizard
+# and will hang an unattended agent.
+ai-orch sync --note "Refactored authentication module; stopped at JWT refresh token caching"
 
-# Document what was learned
-ai-orch update --section "Most recently changed" --value "- src/auth.py: added token validation"
-
-# Create or resolve alerts
+# Record work only a human can do
 ai-orch action-add "Cache refresh tokens in Redis" --type infra --target "Redis cluster"
 
-# Handoff with git commit
-ai-orch handoff
+git add -A && git commit -m "refactor: auth module"
 ```
 
 **Agent B (arriving at project):**
@@ -127,6 +156,9 @@ cat .ai/ALERTS.md              # Check critical blockers
 # See .ai/PENDING.md for manual tasks
 ai-orch action-resolve DB-001  # Mark completed actions as done
 ```
+
+> `handoff` and `qa` prompt on stdin — they are for humans. Agents use `sync`,
+> `update`, `action-add` and `analyze`, none of which block.
 
 ### GitHub Actions integration
 

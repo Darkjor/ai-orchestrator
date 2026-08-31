@@ -27,16 +27,20 @@ from aiorch.analysis import (collect_project_metrics, parse_analysis_status,
                              write_analysis_report)
 from aiorch.config import load_config
 from aiorch.context import (bundle_context, generate_snapshot,
-                            inject_snapshot, update_section)
+                            inject_snapshot, update_context, update_section)
 from aiorch.gitops import (POST_COMMIT_HOOK, PRE_COMMIT_HOOK, GitCommandError,
-                           find_secret_files, get_staged_files,
-                           has_merge_conflicts,
+                           find_secret_files, get_recent_changed_files,
+                           get_staged_files, has_merge_conflicts,
                            scan_conflict_files, write_git_hook)
 from aiorch.handoff_ui import run_handoff_wizard
 from aiorch.lint import check_staged_lint, parse_lint_rules
 from aiorch.observability import get_logger
+from aiorch.portability import (AGENTS_MD_BLOCK, ANTIGRAVITY_RULE,
+                                render_brief, write_managed_block)
 from aiorch.pending import (ensure_pending_file, insert_action,
                             next_action_id, parse_pending, resolve_action)
+from aiorch.render import (_print_model_recommendations,
+                           _run_configured_tests, render_runs_table)
 
 app = typer.Typer(help="Global AI Orchestrator CLI")
 console = Console()
@@ -63,45 +67,6 @@ def init():
         shutil.copy(os.path.join(template_dir, filename), os.path.join(".ai", filename))
 
     console.print("[green]Successfully initialized .ai/ orchestrator folder![/green]")
-
-
-def _print_model_recommendations(config: dict) -> None:
-    """Render the model-routing block shared by triage output."""
-    console.print("\n[bold]Recommended Claude Models[/bold]")
-    models_config = config.get("models", {}) if config else None
-    if not models_config:
-        console.print("[dim]No model recommendations configured in .ai/config.json[/dim]")
-        return
-    default_model = models_config.get("default", "claude-sonnet-4-6")
-    recommendations = models_config.get("recommendations", {})
-    reasoning_tasks = models_config.get("reasoning_tasks", [])
-    console.print(f"Default: [cyan]{default_model}[/cyan]")
-    for task_type, model in recommendations.items():
-        reasoning_note = " (with extended thinking)" if task_type in reasoning_tasks else ""
-        console.print(f"  {task_type}: [yellow]{model}{reasoning_note}[/yellow]")
-
-
-def _run_configured_tests(test_cmd: str) -> None:
-    """Run the project's configured test command and report the outcome."""
-    console.print(f"\n[bold]Running test command: {test_cmd}...[/bold]")
-    try:
-        # shell=True is intentional: test_command comes from the project's own
-        # config.json (trusted, same trust level as a Makefile).
-        res = subprocess.run(test_cmd, shell=True, capture_output=True, text=True, timeout=30)
-    except subprocess.TimeoutExpired:
-        console.print("[yellow][WARN] Test command timed out after 30 seconds.[/yellow]")
-        return
-    except OSError as e:
-        console.print(f"[yellow][WARN] Could not run test command. Reason: {e}[/yellow]")
-        return
-    if res.returncode == 0:
-        console.print("[green][OK] Tests passed successfully![/green]")
-        return
-    console.print(f"[red][ERROR] Test command failed with exit code {res.returncode}[/red]")
-    if res.stdout:
-        console.print(res.stdout)
-    if res.stderr:
-        console.print(res.stderr)
 
 
 @app.command()
@@ -455,22 +420,78 @@ def observe(
     if not runs:
         console.print("[dim]No agent runs recorded yet.[/dim]")
         raise typer.Exit(0)
-    table = Table(title=f"Recent Agent Runs (last {len(runs)})", header_style="bold cyan")
-    for col, justify in (("agent_id", "left"), ("command", "left"), ("timestamp", "left"),
-                         ("latency_ms", "right"), ("cost_usd", "right"),
-                         ("status", "left"), ("eval_score", "right")):
-        table.add_column(col, justify=justify)
-    for row in runs:
-        table.add_row(
-            str(row.get("agent_id", "")),
-            str(row.get("command", "")),
-            str(row.get("timestamp", ""))[:19],
-            str(row.get("latency_ms", "")),
-            str(row.get("cost_usd", "")),
-            str(row.get("status", "")),
-            str(row.get("eval_score") or ""),
-        )
-    console.print(table)
+    console.print(render_runs_table(runs))
+
+
+@app.command()
+def sync(
+    note: str = typer.Option("", "--note", "-n", help="What you did and where you stopped"),
+    src: str = typer.Option("src", "--src", help="Source dir for the symbol snapshot"),
+):
+    """Record the session in .ai/CONTEXT.md from git. Never prompts (for agents)."""
+    if not os.path.exists(".ai"):
+        console.print("[red]Error: .ai/ not found. Run 'ai-orch init' first.[/red]")
+        raise typer.Exit(1)
+    try:
+        changed = get_recent_changed_files()
+    except GitCommandError as e:
+        console.print(f"[yellow][WARN] Could not read git state: {e}. Recording the note only.[/yellow]")
+        changed = []
+    today = datetime.date.today().strftime("%Y-%m-%d")
+    context_path = os.path.join(".ai", "CONTEXT.md")
+    if not update_context(context_path, today, note, ", ".join(changed)):
+        console.print("[red]Error: .ai/CONTEXT.md not found.[/red]")
+        raise typer.Exit(1)
+    console.print(f"[green][OK] Recorded {len(changed)} changed file(s) in CONTEXT.md[/green]")
+    if not note:
+        console.print("[yellow][WARN] No --note given: git says WHAT changed, only you know WHY.[/yellow]")
+    if os.path.isdir(src):
+        inject_snapshot(context_path, generate_snapshot(src))
+        console.print("[green][OK] Codebase snapshot refreshed[/green]")
+
+
+@app.command()
+def brief(
+    out: str = typer.Option("", "--out", "-o", help="Write here instead of stdout (e.g. STATUS.md)"),
+):
+    """Render .ai/ as one human-readable status page for IDE readers."""
+    if not os.path.exists(".ai"):
+        console.print("[red]Error: .ai/ not found. Run 'ai-orch init' first.[/red]")
+        raise typer.Exit(1)
+    config = load_config(os.path.join(".ai", "config.json"))
+    today = datetime.date.today().strftime("%Y-%m-%d")
+    text = render_brief(".ai", config, today)
+    if not out:
+        sys.stdout.buffer.write(text.encode("utf-8"))
+        sys.stdout.buffer.write(b"\n")
+        return
+    try:
+        with open(out, "w", encoding="utf-8") as f:
+            f.write(text)
+    except OSError as e:
+        console.print(f"[red]Error: Could not write to {out}: {e}[/red]")
+        raise typer.Exit(1)
+    console.print(f"[green][OK] Wrote human-readable status to {out}[/green]")
+
+
+@app.command("ide-install")
+def ide_install(
+    antigravity: bool = typer.Option(True, "--antigravity/--no-antigravity",
+                                     help="Also write .agents/rules/ for Antigravity"),
+):
+    """Teach other IDEs the protocol via AGENTS.md and .agents/ rules."""
+    if not os.path.exists(".ai"):
+        console.print("[red]Error: .ai/ not found. Run 'ai-orch init' first.[/red]")
+        raise typer.Exit(1)
+    result = write_managed_block("AGENTS.md", AGENTS_MD_BLOCK, title="Agent instructions")
+    console.print(f"[green][OK] AGENTS.md {result}[/green] [dim](read by Antigravity, Cursor, Copilot)[/dim]")
+    if antigravity:
+        rule = os.path.join(".agents", "rules", "ai-orch.md")
+        os.makedirs(os.path.dirname(rule), exist_ok=True)
+        with open(rule, "w", encoding="utf-8") as f:
+            f.write(ANTIGRAVITY_RULE)
+        console.print(f"[green][OK] Wrote {rule}[/green] [dim](trigger: always_on)[/dim]")
+    console.print("[dim]Only the managed block is rewritten — your own text is kept.[/dim]")
 
 
 if __name__ == "__main__":
