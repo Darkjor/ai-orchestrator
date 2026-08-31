@@ -1,0 +1,19 @@
+{
+  "name": "ai-orch",
+  "owner": {
+    "name": "Darkjor",
+    "url": "https://github.com/Darkjor"
+  },
+  "description": "AI Orchestrator — cross-session shared memory for AI agents.",
+  "plugins": [
+    {
+      "name": "ai-orch",
+      "source": "./",
+      "description": "Arrival/handoff rituals, the .ai/ context folder, and the commit guard that keeps it current.",
+      "version": "0.3.0",
+      "license": "MIT",
+      "category": "productivity",
+      "keywords": ["context", "handoff", "multi-agent", "memory"]
+    }
+  ]
+}

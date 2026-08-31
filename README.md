@@ -26,6 +26,22 @@ cd ai-orchestrator
 pip install -e .
 ```
 
+### Claude Code plugin (optional)
+
+The repo doubles as its own Claude Code marketplace. Installing the plugin teaches
+Claude the arrival/handoff rituals and injects an arrival brief at session start:
+
+```
+/plugin marketplace add Darkjor/ai-orchestrator
+/plugin install ai-orch@ai-orch
+```
+
+You still need the CLI (`pip install ...` above) — the plugin drives it, it does not
+replace it. It adds three skills (`/ai-orch:ai-orch`, `/ai-orch:arrival`,
+`/ai-orch:handoff`) and a `SessionStart` hook that prints open P0/P1 alerts and pending
+manual actions into the agent's context. In a project with no `.ai/` folder the hook
+prints nothing.
+
 ## Quick start
 
 ```bash

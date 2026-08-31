@@ -106,6 +106,11 @@ never break `aiorch.main.app`, `aiorch._helpers.*`, or `aiorch.main.get_logger`.
 - Feature / bugfix / refactor / tests → `claude-sonnet-4-6`
 - Docs → `claude-haiku-4-5-20251001`
 
-**Self-hosting note**: this repo uses its own tooling. The pre-commit hook runs
-`ai-orch check` — every commit that touches code must also update `.ai/`
-(run `ai-orch handoff` or edit `.ai/CONTEXT.md`). Do not bypass it with `--no-verify`.
+**Self-hosting note**: downstream projects install the hooks (`ai-orch hook-install`),
+and there every commit that touches code must also update `.ai/` — run `ai-orch handoff`
+or edit `.ai/CONTEXT.md`; never bypass it with `--no-verify`.
+
+**Do not run `ai-orch hook-install` in THIS repo.** Since `.ai/` was gitignored
+(commit `5e9f796`), a `.ai/` path can no longer be staged here, so `ai-orch check`
+would block every code commit with no way to satisfy it. Either untrack the ignore for
+this repo or leave the hooks uninstalled — the CI workflow does not run `check`.

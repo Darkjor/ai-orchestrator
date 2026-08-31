@@ -30,7 +30,16 @@ docs/AI_ARCHITECTURE.md         # THIS FILE — master context map
 docs/API.md                     # public helper API reference
 docs/TROUBLESHOOTING.md         # known issues and fixes
 scripts/supabase_schema.sql     # table for the optional observability backend
+scripts/session_start.sh        # SessionStart hook body (arrival brief → agent context)
 .env.example                    # SUPABASE_URL / SUPABASE_ANON_KEY template
+
+.claude-plugin/plugin.json      # Claude Code plugin manifest (name: ai-orch)
+.claude-plugin/marketplace.json # marketplace catalog — the repo IS its own marketplace
+hooks/hooks.json                # SessionStart hook wiring (startup|resume|clear)
+skills/
+  ai-orch/SKILL.md              # full reference; Claude auto-loads it on context/handoff work
+  arrival/SKILL.md              # /ai-orch:arrival — start-of-session protocol
+  handoff/SKILL.md              # /ai-orch:handoff — end-of-session protocol
 
 src/aiorch/
   main.py                       # CLI surface ONLY — 13 Typer commands, Rich rendering
@@ -53,8 +62,8 @@ src/aiorch/
     ANALYSIS.md                 # runtime-only: NOT copied by init, written by analyze
 
 tests/
-  test_cli.py                   # 73 CLI tests (CliRunner, real git, no mocking of fs)
-  test_observability.py         # 10 tests for the Supabase logger
+  test_cli.py                   # 76 CLI tests (CliRunner, real git, no mocking of fs)
+  test_observability.py         # 14 tests for the Supabase logger
 ```
 
 ---
@@ -188,7 +197,7 @@ Agents and tests parse these — keep them.
 
 ---
 
-## 7. Tests are the contract (93 tests)
+## 7. Tests are the contract (115 tests)
 
 - [tests/test_cli.py](../tests/test_cli.py) — CLI behaviour via `typer.testing.CliRunner`
   in `tmp_path` (chdir), with REAL git subprocesses, no filesystem mocking.

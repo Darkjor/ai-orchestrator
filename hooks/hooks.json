@@ -1,0 +1,19 @@
+{
+  "description": "ai-orch: inject the arrival brief (.ai/ alerts + pending actions) at session start.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/session_start.sh",
+            "args": [],
+            "timeout": 10,
+            "statusMessage": "Reading .ai/ context"
+          }
+        ]
+      }
+    ]
+  }
+}

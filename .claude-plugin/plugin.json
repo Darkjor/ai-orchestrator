@@ -1,0 +1,14 @@
+{
+  "name": "ai-orch",
+  "displayName": "AI Orchestrator",
+  "version": "0.3.0",
+  "description": "Shared memory for AI agents: a .ai/ folder of Markdown context files plus git hooks that keep it from going stale. Adds arrival/handoff rituals as skills.",
+  "author": {
+    "name": "Darkjor",
+    "url": "https://github.com/Darkjor"
+  },
+  "homepage": "https://github.com/Darkjor/ai-orchestrator",
+  "repository": "https://github.com/Darkjor/ai-orchestrator",
+  "license": "MIT",
+  "keywords": ["ai", "orchestration", "context", "handoff", "multi-agent", "memory"]
+}
