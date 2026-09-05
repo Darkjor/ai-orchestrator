@@ -12,15 +12,15 @@
   ],
   "enforce_changelog": false,
   "models": {
-    "default": "claude-sonnet-4-6",
+    "default": "claude-sonnet-5",
     "recommendations": {
-      "architecture": "claude-opus-4-8",
-      "code_review": "claude-opus-4-8",
-      "refactoring": "claude-sonnet-4-6",
-      "bugfix": "claude-sonnet-4-6",
-      "feature": "claude-sonnet-4-6",
-      "tests": "claude-sonnet-4-6",
-      "docs": "claude-haiku-4-5-20251001"
+      "architecture": "claude-opus-5",
+      "code_review": "claude-opus-5",
+      "refactoring": "claude-sonnet-5",
+      "bugfix": "claude-sonnet-5",
+      "feature": "claude-sonnet-5",
+      "tests": "claude-sonnet-5",
+      "docs": "claude-haiku-4-5"
     },
     "reasoning_tasks": [
       "architecture",

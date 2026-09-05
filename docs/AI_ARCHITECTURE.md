@@ -253,5 +253,5 @@ Adding a CLI command:
 
 Model routing (who should do the work) is configured per-project in
 `.ai/config.json → models.recommendations` and surfaced by `triage`/`handoff`:
-architecture & code review → `claude-opus-4-8` (extended thinking),
-feature/bugfix/refactor/tests → `claude-sonnet-4-6`, docs → `claude-haiku-4-5-20251001`.
+architecture & code review → `claude-opus-5` (extended thinking),
+feature/bugfix/refactor/tests → `claude-sonnet-5`, docs → `claude-haiku-4-5`.

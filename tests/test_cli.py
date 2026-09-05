@@ -172,7 +172,7 @@ def test_triage_shows_model_recommendations(tmp_path):
     result = runner.invoke(app, ["triage"])
     assert result.exit_code == 0
     assert "Recommended Claude Models" in result.output
-    assert "claude-sonnet-4-6" in result.output
+    assert "claude-sonnet-5" in result.output
 
 def test_handoff_task_type_selection(tmp_path):
     os.chdir(tmp_path)
@@ -205,8 +205,8 @@ def test_config_json_models_field_parsed_correctly(tmp_path):
     assert "default" in config["models"]
     assert "recommendations" in config["models"]
     assert "reasoning_tasks" in config["models"]
-    assert config["models"]["default"] == "claude-sonnet-4-6"
-    assert config["models"]["recommendations"]["architecture"] == "claude-opus-4-8"
+    assert config["models"]["default"] == "claude-sonnet-5"
+    assert config["models"]["recommendations"]["architecture"] == "claude-opus-5"
     assert "architecture" in config["models"]["reasoning_tasks"]
 
 
@@ -1306,9 +1306,15 @@ def test_ide_install_closes_the_claude_md_discovery_gap(tmp_path):
     assert result.exit_code == 0
     claude_md = open("CLAUDE.md", encoding="utf-8").read()
     # @-prefixed paths are imports, not references — that is the whole point.
-    assert "@.ai/ORCHESTRATOR.md" in claude_md
-    assert "@.ai/ALERTS.md" in claude_md
+    assert "@.ai/CONTEXT.md" in claude_md
     assert "ai-orch:start" in claude_md
+    # An import is paid every session, so only the live file is imported: the
+    # hook already delivers alerts/pending and the skill carries the protocol.
+    assert "@.ai/ORCHESTRATOR.md" not in claude_md
+    assert "@.ai/ALERTS.md" not in claude_md
+    assert "@.ai/WHEELS.md" not in claude_md
+    # ...but the agent is still told where they are.
+    assert ".ai/WHEELS.md" in claude_md
 
 
 def test_ide_install_preserves_hand_written_claude_md(tmp_path):

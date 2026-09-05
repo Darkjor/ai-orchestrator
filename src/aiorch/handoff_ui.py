@@ -46,7 +46,7 @@ def run_handoff_wizard(with_snapshot: bool) -> None:
         task_type = "feature"
 
     if models_config:
-        recommended_model = models_config.get("recommendations", {}).get(task_type, models_config.get("default", "claude-sonnet-4-6"))
+        recommended_model = models_config.get("recommendations", {}).get(task_type, models_config.get("default", "claude-sonnet-5"))
         reasoning_tasks = models_config.get("reasoning_tasks", [])
         # ASCII-only output: legacy Windows consoles (cp1252) crash Rich on
         # characters like U+2139/U+2713 — the [OK]/[WARN] prefix convention

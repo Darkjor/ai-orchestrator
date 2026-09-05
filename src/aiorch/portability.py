@@ -72,19 +72,43 @@ Never bypass the pre-commit guard with `--no-verify`; update `.ai/` instead.
 # on an agent knowing to go Read it. This is the mechanism DEC-007 established
 # (commit ce554dc, "closes that discovery gap") and that removing the repo's own
 # .ai/ folder in 30693e1 silently took away without a superseding decision.
+#
+# WHY only CONTEXT.md is imported: an import is paid on EVERY session, so the
+# block must carry only what is both live and not delivered some cheaper way.
+# Measured on a fresh `init`, importing all four files cost ~10,400 characters
+# a session; this costs ~1,700.
+#   - ORCHESTRATOR.md (~5,500 chars) is static protocol that does not change
+#     between sessions — the skill carries it, and loads on demand.
+#   - ALERTS.md and PENDING.md are already delivered by the SessionStart hook,
+#     live and filtered to what is open, in ~450 characters.
+#   - WHEELS.md matters when you are about to implement something, not on
+#     arrival — the hook and AGENTS.md both point at it.
+# CONTEXT.md is the exception: it is where the last session stopped, it changes
+# every session, and nothing else delivers it.
 CLAUDE_MD_BLOCK = """## Project context (auto-loaded)
 
-The files below are imported, not just referenced — Claude Code loads them into
-project context every session, so the arrival protocol runs without anyone
-remembering to ask for it.
-
-@.ai/ORCHESTRATOR.md
 @.ai/CONTEXT.md
-@.ai/ALERTS.md
-@.ai/WHEELS.md
 
-`ai-orch triage` is the same information as a single command. Before finishing,
-record the session with `ai-orch sync --note "what you did, where you stopped"`.
+The line above is an import, not a reference — Claude Code loads that file into
+project context every session, so you always know where the last one stopped.
+
+Everything else in `.ai/` is read on demand, to keep this block cheap:
+
+- `.ai/ALERTS.md` and `.ai/PENDING.md` — open issues and human-only work.
+  `ai-orch triage` prints both, and the ai-orch SessionStart hook injects them
+  automatically if the plugin is installed.
+- `.ai/WHEELS.md` — approaches already tried and rejected. Read it before
+  implementing anything non-trivial; do not re-litigate a `FAIL-XXX` entry.
+- `.ai/DECISIONS.md` — why the project is built the way it is.
+
+Before finishing, record the session:
+
+```bash
+ai-orch sync --note "what you did, where you stopped"
+```
+
+It never prompts and reads the changed files from git. The pre-commit guard
+blocks code commits that leave `.ai/` stale, so this is not optional.
 """
 
 # Antigravity workspace rule. `trigger: always_on` is that IDE's nearest

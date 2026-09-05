@@ -21,7 +21,7 @@ def _print_model_recommendations(config: dict) -> None:
     if not models_config:
         console.print("[dim]No model recommendations configured in .ai/config.json[/dim]")
         return
-    default_model = models_config.get("default", "claude-sonnet-4-6")
+    default_model = models_config.get("default", "claude-sonnet-5")
     recommendations = models_config.get("recommendations", {})
     reasoning_tasks = models_config.get("reasoning_tasks", [])
     console.print(f"Default: [cyan]{default_model}[/cyan]")

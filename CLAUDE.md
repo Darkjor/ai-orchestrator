@@ -123,9 +123,9 @@ never break `aiorch.main.app`, `aiorch._helpers.*`, or `aiorch.main.get_logger`.
 
 **Model routing** (template `config.json`, surfaced by `triage`/`handoff`):
 
-- Architecture / code review → `claude-opus-4-8` (extended thinking)
-- Feature / bugfix / refactor / tests → `claude-sonnet-4-6`
-- Docs → `claude-haiku-4-5-20251001`
+- Architecture / code review → `claude-opus-5` (extended thinking)
+- Feature / bugfix / refactor / tests → `claude-sonnet-5`
+- Docs → `claude-haiku-4-5`
 
 **Self-hosting note**: downstream projects install the hooks (`ai-orch hook-install`),
 and there every commit that touches code must also update `.ai/` — run `ai-orch handoff`

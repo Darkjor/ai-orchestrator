@@ -57,17 +57,17 @@ The recommended Claude model depends on task complexity and budget:
 
 | Task Type | Recommended Model | When to Use | Benefits |
 |-----------|------------------|-------------|----------|
-| **Architecture** | claude-opus-4-8 | System design, major refactors, complex decisions | Extended thinking mode (reasoning) |
-| **Code Review** | claude-opus-4-8 | Peer review, security audit, performance analysis | Extended thinking for thorough analysis |
-| **Refactoring** | claude-sonnet-4-6 | Code cleanup, pattern improvements, modernization | Best balance of capability and cost |
-| **Bugfix** | claude-sonnet-4-6 | Fixing bugs, debugging issues | Sufficient for targeted fixes |
-| **Feature** | claude-sonnet-4-6 | New functionality, feature development | Good cost/capability ratio |
-| **Tests** | claude-sonnet-4-6 | Test writing, test maintenance | Capable for test generation |
+| **Architecture** | claude-opus-5 | System design, major refactors, complex decisions | Extended thinking mode (reasoning) |
+| **Code Review** | claude-opus-5 | Peer review, security audit, performance analysis | Extended thinking for thorough analysis |
+| **Refactoring** | claude-sonnet-5 | Code cleanup, pattern improvements, modernization | Best balance of capability and cost |
+| **Bugfix** | claude-sonnet-5 | Fixing bugs, debugging issues | Sufficient for targeted fixes |
+| **Feature** | claude-sonnet-5 | New functionality, feature development | Good cost/capability ratio |
+| **Tests** | claude-sonnet-5 | Test writing, test maintenance | Capable for test generation |
 | **Documentation** | claude-haiku-4-5 | Docs, comments, content writing | Lightweight, cost-effective |
 
-**Extended Thinking Mode**: Recommended for architecture and code review tasks. Use this when problem-solving requires deep analysis.
+**Reasoning depth**: On current models thinking is adaptive and on by default — there is no switch to flip and no token budget to tune. Control depth with the effort level instead, and reserve the highest settings for architecture and code review. Do not add "think step by step" to a prompt: the model already reasons, and the instruction degrades output rather than improving it.
 
-**Default**: This project uses `claude-sonnet-4-6` by default, with Opus reserved for critical decisions.
+**Default**: This project uses `claude-sonnet-5` by default, with Opus reserved for critical decisions.
 
 Check `.ai/config.json` for this project's specific model recommendations.
 
