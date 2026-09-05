@@ -11,6 +11,10 @@
 
 [ -d ".ai" ] || exit 0
 
+# Clear the Stop-hook marker: one departure nudge per session, and this is
+# where a session begins. See scripts/stop_nudge.sh -> LOOP SAFETY.
+rm -f ".ai/logs/.stop-nudged" 2>/dev/null || true
+
 PY=""
 for c in python3 python; do
   command -v "$c" >/dev/null 2>&1 && { PY="$c"; break; }

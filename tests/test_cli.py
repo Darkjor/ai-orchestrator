@@ -1327,3 +1327,50 @@ def test_ide_install_preserves_hand_written_claude_md(tmp_path):
     claude_md = open("CLAUDE.md", encoding="utf-8").read()
     assert "Never touch billing/." in claude_md
     assert claude_md.count("ai-orch:start") == 1
+
+
+# ---------------------------------------------------------------------------
+# setup — the one-command path
+# ---------------------------------------------------------------------------
+
+def test_setup_does_init_hooks_and_ide_in_one(tmp_path):
+    os.chdir(tmp_path)
+    subprocess.run(["git", "init"], check=True, capture_output=True)
+    result = runner.invoke(app, ["setup"])
+    assert result.exit_code == 0, result.output
+    assert os.path.exists(".ai/CONTEXT.md")
+    assert os.path.exists(".git/hooks/pre-commit")
+    assert os.path.exists("AGENTS.md")
+    assert os.path.exists("CLAUDE.md")
+    assert os.path.exists(os.path.join(".agents", "rules", "ai-orch.md"))
+
+
+def test_setup_without_git_warns_but_still_sets_up(tmp_path):
+    os.chdir(tmp_path)
+    result = runner.invoke(app, ["setup"])
+    assert result.exit_code == 0
+    assert "[WARN]" in result.output
+    assert os.path.exists(".ai/CONTEXT.md")
+    assert os.path.exists("AGENTS.md")
+
+
+def test_setup_is_idempotent_and_keeps_existing_ai(tmp_path):
+    os.chdir(tmp_path)
+    subprocess.run(["git", "init"], check=True, capture_output=True)
+    runner.invoke(app, ["setup"])
+    with open(".ai/CONTEXT.md", "a", encoding="utf-8") as f:
+        f.write("\n- my own note\n")
+    result = runner.invoke(app, ["setup"])
+    assert result.exit_code == 0
+    assert "already exists" in result.output
+    assert "my own note" in open(".ai/CONTEXT.md", encoding="utf-8").read()
+
+
+def test_setup_flags_can_skip_parts(tmp_path):
+    os.chdir(tmp_path)
+    subprocess.run(["git", "init"], check=True, capture_output=True)
+    result = runner.invoke(app, ["setup", "--no-hooks", "--no-ide"])
+    assert result.exit_code == 0
+    assert os.path.exists(".ai/CONTEXT.md")
+    assert not os.path.exists(".git/hooks/pre-commit")
+    assert not os.path.exists("AGENTS.md")

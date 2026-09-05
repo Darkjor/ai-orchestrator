@@ -1,5 +1,5 @@
 {
-  "description": "ai-orch: inject the arrival brief (.ai/ alerts + pending actions) at session start.",
+  "description": "ai-orch: inject the arrival brief at session start, and remind the agent once per session to record the work before it ends.",
   "hooks": {
     "SessionStart": [
       {
@@ -11,6 +11,18 @@
             "args": [],
             "timeout": 10,
             "statusMessage": "Reading .ai/ context"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/stop_nudge.sh",
+            "args": [],
+            "timeout": 10
           }
         ]
       }

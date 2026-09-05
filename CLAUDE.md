@@ -58,7 +58,8 @@ pip install -e .
 pytest
 pytest tests/test_cli.py::test_init_creates_ai_folder
 
-# CLI (all 18 commands)
+# CLI (all 19 commands)
+ai-orch setup             # init + hook-install + ide-install in one (start here)
 ai-orch init              # create .ai/ from templates (8 files)
 ai-orch triage            # alerts + pending + model routing + conflict/secret scan + tests
 ai-orch check             # pre-commit guard: code staged without .ai/ update → exit 1

@@ -31,11 +31,12 @@ docs/API.md                     # public helper API reference
 docs/TROUBLESHOOTING.md         # known issues and fixes
 scripts/supabase_schema.sql     # table for the optional observability backend
 scripts/session_start.sh        # SessionStart hook body (arrival brief → agent context)
+scripts/stop_nudge.sh           # Stop hook body (one departure reminder per session)
 .env.example                    # SUPABASE_URL / SUPABASE_ANON_KEY template
 
 .claude-plugin/plugin.json      # Claude Code plugin manifest (name: ai-orch)
 .claude-plugin/marketplace.json # marketplace catalog — the repo IS its own marketplace
-hooks/hooks.json                # SessionStart hook wiring (startup|resume|clear)
+hooks/hooks.json                # SessionStart + Stop hook wiring
 skills/
   ai-orch/SKILL.md              # full reference; Claude auto-loads it on context/handoff work
   arrival/SKILL.md              # /ai-orch:arrival — start-of-session protocol
@@ -43,7 +44,7 @@ skills/
   pipeline/SKILL.md             # multi-agent production standard (envelopes, roles, versions)
 
 src/aiorch/
-  main.py                       # CLI surface ONLY — 18 Typer commands, Rich rendering
+  main.py                       # CLI surface ONLY — 19 Typer commands, Rich rendering
   handoff_ui.py                 # interactive handoff wizard presentation logic
   render.py                     # shared Rich rendering (triage helpers, observe table)
   portability.py                # AGENTS.md / CLAUDE.md imports / .agents rules + brief
@@ -67,7 +68,7 @@ src/aiorch/
     ANALYSIS.md                 # runtime-only: NOT copied by init, written by analyze
 
 tests/
-  test_cli.py                   # 98 CLI tests (CliRunner, real git, no mocking of fs)
+  test_cli.py                   # 102 CLI tests (CliRunner, real git, no mocking of fs)
   test_observability.py         # 14 tests for the Supabase logger
   test_modules.py               # 47 domain-module tests (gitops, logs, portability, pipeline, shim)
 ```
@@ -79,7 +80,7 @@ tests/
 ```mermaid
 graph TD
     subgraph "CLI surface"
-        MAIN["src/aiorch/main.py<br/>18 Typer commands"]
+        MAIN["src/aiorch/main.py<br/>19 Typer commands"]
         HANDOFF_UI["src/aiorch/handoff_ui.py<br/>Interactive wizard presentation"]
         RENDER["src/aiorch/render.py<br/>Shared Rich rendering"]
     end
@@ -145,6 +146,7 @@ Dependency rules (enforce these in review):
 | `qa` | `main.py:qa` | analysis, alerts, pending, context | `.ai/ANALYSIS.md` + live state | `.ai/ANALYSIS.md` status; on mismatch also ALERTS + PENDING (auto-heal) |
 | `sync` | `main.py:sync` | gitops, context | git status/HEAD | `.ai/CONTEXT.md` (non-interactive) |
 | `brief` | `main.py:brief` | portability | all `.ai/*` | stdout or `--out` file |
+| `setup` | `main.py:setup` | — | — | calls init + hook_install + ide_install |
 | `ide-install` | `main.py:ide_install` | portability | — | `AGENTS.md`, `CLAUDE.md`, `.agents/rules/ai-orch.md` |
 | `validate` | `main.py:validate` | pipeline | a JSON envelope | exit code (1 = contract violated) |
 | `roles` | `main.py:roles` | pipeline, config | `.ai/config.json` | stdout only |
@@ -216,7 +218,7 @@ Agents and tests parse these — keep them.
 
 ---
 
-## 7. Tests are the contract (159 tests)
+## 7. Tests are the contract (163 tests)
 
 - [tests/test_cli.py](../tests/test_cli.py) — CLI behaviour via `typer.testing.CliRunner`
   in `tmp_path` (chdir), with REAL git subprocesses, no filesystem mocking.

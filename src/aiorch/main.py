@@ -470,5 +470,29 @@ def roles():
                       "add a \"version\" to each agent in .ai/config.json.[/yellow]")
 
 
+@app.command()
+def setup(
+    hooks: bool = typer.Option(True, "--hooks/--no-hooks", help="Install the git guard"),
+    ide: bool = typer.Option(True, "--ide/--no-ide", help="Write AGENTS.md / CLAUDE.md / .agents rules"),
+):
+    """Set a project up in one command: init + hook-install + ide-install."""
+    if not os.path.exists(".ai"):
+        init()
+    else:
+        console.print("[yellow][WARN] .ai/ already exists — keeping it.[/yellow]")
+    if hooks:
+        if os.path.exists(".git"):
+            hook_install()
+        else:
+            console.print("[yellow][WARN] Not a git repository — skipping the commit guard. "
+                          "Run 'git init' then 'ai-orch hook-install'.[/yellow]")
+    if ide:
+        ide_install()
+    console.print("\n[green][OK] Ready.[/green] Edit [bold].ai/config.json[/bold] "
+                  "(project_name, stack, test_command), then work as usual:")
+    console.print("  [dim]arrive →[/dim] ai-orch triage")
+    console.print("  [dim]leave  →[/dim] ai-orch sync --note \"where you stopped\"")
+
+
 if __name__ == "__main__":
     app()

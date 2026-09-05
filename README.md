@@ -62,35 +62,31 @@ Claude the arrival/handoff rituals and injects an arrival brief at session start
 
 You still need the CLI (`pip install ...` above) — the plugin drives it, it does not
 replace it. It adds four skills (`/ai-orch:ai-orch`, `/ai-orch:arrival`,
-`/ai-orch:handoff`, `/ai-orch:pipeline`) and a `SessionStart` hook that prints open P0/P1 alerts and pending
-manual actions into the agent's context. In a project with no `.ai/` folder the hook
-prints nothing.
+`/ai-orch:handoff`, `/ai-orch:pipeline`) plus two hooks: `SessionStart` prints open P0/P1 alerts and pending manual actions
+into the agent's context, and `Stop` reminds it once per session when code changed
+without `.ai/` being updated. In a project with no `.ai/` folder both stay silent.
 
 ## Quick start
 
 ```bash
-# 1. Initialize in your project root
+# Once per project — init + commit guard + cross-IDE files, in one command
 cd your-project
-ai-orch init
+ai-orch setup
 
-# 2. Run triage at the start of every session
-ai-orch triage
-
-# 3. Install the pre-commit guard
-ai-orch hook-install
-
-# 4. Teach other IDEs the protocol (Antigravity, Cursor, Copilot)
-ai-orch ide-install
-
-# 5. At the end of each session, hand off
-ai-orch handoff                          # human at the keyboard
-ai-orch sync --note "where you stopped"  # agent, unattended
+# Then the whole daily loop is two commands
+ai-orch triage                           # arriving
+ai-orch sync --note "where you stopped"  # leaving
 ```
+
+With the Claude Code plugin installed, even those two are automatic: the
+`SessionStart` hook injects the arrival brief, and a `Stop` hook reminds the
+agent once per session if it changed code without recording anything.
 
 ## Commands
 
 | Command | What it does |
 | ------- | ------------ |
+| `ai-orch setup` | **Start here** — `init` + `hook-install` + `ide-install` in one command |
 | `ai-orch init` | Creates `.ai/` folder with 8 context files |
 | `ai-orch triage` | Shows active alerts, pending actions, model recommendations; scans for conflicts/secrets; runs tests |
 | `ai-orch check` | Pre-commit guard: fails if code changed but `.ai/` wasn't updated, or WHEELS.md lint rules are violated |
