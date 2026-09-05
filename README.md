@@ -61,8 +61,8 @@ Claude the arrival/handoff rituals and injects an arrival brief at session start
 ```
 
 You still need the CLI (`pip install ...` above) — the plugin drives it, it does not
-replace it. It adds three skills (`/ai-orch:ai-orch`, `/ai-orch:arrival`,
-`/ai-orch:handoff`) and a `SessionStart` hook that prints open P0/P1 alerts and pending
+replace it. It adds four skills (`/ai-orch:ai-orch`, `/ai-orch:arrival`,
+`/ai-orch:handoff`, `/ai-orch:pipeline`) and a `SessionStart` hook that prints open P0/P1 alerts and pending
 manual actions into the agent's context. In a project with no `.ai/` folder the hook
 prints nothing.
 
@@ -105,13 +105,47 @@ ai-orch sync --note "where you stopped"  # agent, unattended
 | `ai-orch qa` | Cross-checks the analysis against live state; escalates discrepancies |
 | `ai-orch export` | Bundles all `.ai/` files into one Markdown document (stdout or `--out`) |
 | `ai-orch brief` | Renders `.ai/` as one human-readable status page for teammates browsing the repo |
-| `ai-orch ide-install` | Writes `AGENTS.md` + `.agents/rules/` so Antigravity, Cursor and Copilot learn the protocol |
+| `ai-orch ide-install` | Writes `AGENTS.md`, `CLAUDE.md` `@imports` and `.agents/rules/` so every IDE learns the protocol |
+| `ai-orch validate` | Validates a structured inter-agent envelope before it is passed on (`--role` pins the sender) |
+| `ai-orch roles` | Lists agent role prompts and their versions |
 | `ai-orch observe` | Shows recent agent-run metrics from the optional Supabase store |
 
 `ai-orch` itself only records `latency_ms` and `status` for `analyze` and `qa` (including `override_approved` on a human override). The `tokens_in`/`tokens_out`/`cost_usd`/`eval_score` columns are populated by your own agents calling `SupabaseLogger.log_run(...)` directly — `observe` just renders whatever the table holds.
 
 * Para documentación detallada y en español, consulta el [Manual de Usuario](docs/MANUAL.md).
 * Architecture and data contracts for contributors (human or AI): [docs/AI_ARCHITECTURE.md](docs/AI_ARCHITECTURE.md).
+
+## Multi-agent pipelines
+
+When more than one agent works a task, prose between them is the failure point:
+the receiver has to *interpret*, and interpretation is where hallucination enters.
+`ai-orch` defines a structured envelope instead, and validates it at the boundary.
+
+```
+planner ──▶ executor ──▶ qa ──┬─▶ executor   (rejected: another pass)
+                              └─▶ none       (approved: chain ends)
+```
+
+```bash
+ai-orch validate envelope.json --role executor
+```
+
+Exit 0 prints the routing decision; exit 1 lists every violation at once with the
+exact field path, so an agent fixes them in one pass rather than one round-trip
+per field. The contract enforces role-specific required fields, legal transitions
+(nothing routes back to the planner, so a chain cannot loop forever), that a step
+carries a verifiable `done_when`, that `status: "ok"` cites evidence, and that QA
+cannot approve while a P0 finding stands.
+
+Role prompts live in `.ai/config.json` and are versioned like code:
+
+```bash
+ai-orch roles     # every role and its prompt version
+```
+
+The full standard — decomposition, structured chaining, which prompting habits are
+now hard API errors, prompt versioning, and why QA stays fresh — is in
+[skills/pipeline/SKILL.md](skills/pipeline/SKILL.md).
 
 ## The `.ai/` folder
 

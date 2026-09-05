@@ -22,24 +22,63 @@
       "tests": "claude-sonnet-4-6",
       "docs": "claude-haiku-4-5-20251001"
     },
-    "reasoning_tasks": ["architecture", "code_review"],
+    "reasoning_tasks": [
+      "architecture",
+      "code_review"
+    ],
     "budget_preference": "prefer_sonnet"
   },
   "agents": {
+    "planner": {
+      "version": "1.0.0",
+      "role": "Descompones una tarea en sub-pasos ordenados y concretos antes de que nadie escriba código. Cada paso lleva una condición de término verificable; un paso sin ella es una intención, no un paso.",
+      "outputs": "envelope ai-orch/v1, role=planner",
+      "hands_to": "executor",
+      "prompt_changelog": [
+        "1.0.0 — initial: decomposition with verifiable done_when per step"
+      ]
+    },
+    "executor": {
+      "version": "1.0.0",
+      "role": "Ejecutas UN paso del plan a la vez. No re-planificas: si el paso está mal especificado, devuelves status=blocked con blocked_on en vez de improvisar.",
+      "outputs": "envelope ai-orch/v1, role=executor",
+      "hands_to": "qa",
+      "prompt_changelog": [
+        "1.0.0 — initial: one step at a time, block instead of re-planning"
+      ]
+    },
     "analyzer": {
       "role": "Eres un analizador de proyecto especializado en evaluar el estado real de un codebase. Tu trabajo es reportar métricas reales y verificables, nunca estimaciones.",
-      "focus": ["test_coverage", "open_alerts", "pending_actions", "decisions_made", "git_status"],
+      "focus": [
+        "test_coverage",
+        "open_alerts",
+        "pending_actions",
+        "decisions_made",
+        "git_status"
+      ],
       "self_check_questions": [
         "¿Todos los datos que reporto son reales y verificables?",
         "¿Hay algo ambiguo que deba escalar al humano?",
         "¿Estoy alucinando algún dato o todo viene de fuentes concretas?"
       ],
-      "report_to": "ANALYSIS.md"
+      "report_to": "ANALYSIS.md",
+      "version": "1.0.0",
+      "prompt_changelog": [
+        "1.0.0 — initial: verifiable metrics only, no estimates"
+      ]
     },
     "qa_reviewer": {
       "role": "Eres un QA reviewer especializado en validar análisis de agentes. Tu trabajo es detectar alucinaciones, datos incorrectos, y hallazgos ambiguos antes de que se apliquen cambios.",
-      "escalate_if": ["datos no verificables", "conclusiones contradictorias", "falta de evidencia"],
-      "on_issue": "create_alert_and_action"
+      "escalate_if": [
+        "datos no verificables",
+        "conclusiones contradictorias",
+        "falta de evidencia"
+      ],
+      "on_issue": "create_alert_and_action",
+      "version": "1.0.0",
+      "prompt_changelog": [
+        "1.0.0 — initial: hallucination and ambiguity gate"
+      ]
     }
   },
   "observability": {
@@ -51,9 +90,19 @@
     },
     "thresholds": {
       "latency_warn_ms": 5000,
-      "cost_warn_usd": 0.10,
+      "cost_warn_usd": 0.1,
       "error_rate_warn_pct": 10
     },
     "enabled": "auto"
+  },
+  "pipeline": {
+    "schema": "ai-orch/v1",
+    "chain": [
+      "planner",
+      "executor",
+      "qa"
+    ],
+    "validate_between_steps": true,
+    "_comment": "Agents exchange JSON envelopes, not prose. Validate each one with `ai-orch validate <file> --role <expected>` before handing it on."
   }
 }

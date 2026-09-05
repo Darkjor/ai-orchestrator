@@ -22,9 +22,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from aiorch.alerts import insert_alert, next_alert_id, parse_alerts
-from aiorch.analysis import (collect_project_metrics, parse_analysis_status,
-                             qa_cross_check, set_analysis_status,
-                             write_analysis_report)
+from aiorch.analysis_ui import run_analyze, run_qa
 from aiorch.config import load_config
 from aiorch.context import (bundle_context, generate_snapshot,
                             inject_snapshot, update_context, update_section)
@@ -36,7 +34,10 @@ from aiorch.handoff_ui import run_handoff_wizard
 from aiorch.lint import check_staged_lint, parse_lint_rules
 from aiorch.observability import get_logger
 from aiorch.portability import (AGENTS_MD_BLOCK, ANTIGRAVITY_RULE,
-                                render_brief, write_managed_block)
+                                CLAUDE_MD_BLOCK, render_brief,
+                                write_managed_block)
+from aiorch.pipeline import (load_envelope, next_step, role_versions,
+                             validate_envelope)
 from aiorch.pending import (ensure_pending_file, insert_action,
                             next_action_id, parse_pending, resolve_action)
 from aiorch.render import (_print_model_recommendations,
@@ -294,84 +295,13 @@ def action_resolve(action_id: str = typer.Argument(..., help="Action ID to mark 
 @app.command()
 def analyze():
     """Run specialized analysis of the project and write results to .ai/ANALYSIS.md."""
-    if not os.path.exists(".ai"):
-        console.print("[red]Error: .ai/ not found. Run 'ai-orch init' first.[/red]")
-        raise typer.Exit(1)
-    t0 = time.time()
-    config = load_config(os.path.join(".ai", "config.json"))
-    agent_cfg = config.get("agents", {}).get("analyzer", {})
-    agent_role = agent_cfg.get("role", "Eres un analizador de proyecto especializado.")
-    console.print(Panel("[bold blue]AI Orchestrator — Analysis Run[/bold blue]", expand=False))
-    console.print(f"[dim]Agente: analyzer — {agent_role[:70]}[/dim]\n")
-    metrics = collect_project_metrics(".ai")
-    console.print(f"[green][OK][/green] Tests: {metrics['tests_collected']} collected")
-    console.print(f"[green][OK][/green] Alertas: {metrics['p0']} P0, {metrics['p1']} P1, {metrics['p2']} P2")
-    console.print(f"[green][OK][/green] Pending: {metrics['pending_count']}  |  Decisions: {metrics['decisions_count']}  |  Git: {metrics['git_modified']} modificados")
-    console.print("\n[bold]Self-Check:[/bold]")
-    console.print("  [green][OK][/green] Datos reales? -> Si (pytest, alerts, pending, git diff)")
-    ambig = f"Si -- {metrics['p0']} P0(s)" if metrics["p0"] > 0 else "No"
-    icon = "[yellow][!][/yellow]" if metrics["p0"] > 0 else "[green][OK][/green]"
-    console.print(f"  {icon} Algo ambiguo? -> {ambig}")
-    console.print("  [green][OK][/green] Alucinacion? -> No")
-    today_str = datetime.date.today().strftime("%Y-%m-%d")
-    write_analysis_report(os.path.join(".ai", "ANALYSIS.md"), metrics, agent_role, today_str)
-    get_logger().log_run("analyze", "analyze", latency_ms=int((time.time() - t0) * 1000), status="ok")
-    console.print("\n[green][OK] Analisis escrito en .ai/ANALYSIS.md (status: PENDING QA)[/green]")
+    run_analyze(get_logger)
 
 
 @app.command()
 def qa():
     """QA review of .ai/ANALYSIS.md — AI first pass, human escalation if ambiguous."""
-    if not os.path.exists(".ai"):
-        console.print("[red]Error: .ai/ not found. Run 'ai-orch init' first.[/red]")
-        raise typer.Exit(1)
-    analysis_path = os.path.join(".ai", "ANALYSIS.md")
-    if not os.path.exists(analysis_path):
-        console.print("[red]Error: .ai/ANALYSIS.md not found. Run 'ai-orch analyze' first.[/red]")
-        raise typer.Exit(1)
-    status = parse_analysis_status(analysis_path)
-    if status not in ("PENDING", "QA_ESCALATED"):
-        console.print(f"[yellow][WARN] Analysis ya revisado (status: {status}). Nada que hacer.[/yellow]")
-        raise typer.Exit(0)
-    t0 = time.time()
-    config = load_config(os.path.join(".ai", "config.json"))
-    qa_role = config.get("agents", {}).get("qa_reviewer", {}).get("role", "Eres un QA reviewer especializado.")
-    console.print(Panel("[bold magenta]AI Orchestrator — QA Review[/bold magenta]", expand=False))
-    console.print(f"[dim]Agente: qa_reviewer — {qa_role[:70]}[/dim]\n")
-    issues = qa_cross_check(analysis_path, ".ai")
-    today_str = datetime.date.today().strftime("%Y-%m-%d")
-    if not issues:
-        console.print("[green][OK][/green] Metricas verificadas -- sin discrepancias")
-        update_section(analysis_path, "QA Review", f"**Resultado**: APROBADO\n**Fecha**: {today_str}\n**Notas**: Sin discrepancias detectadas.")
-        set_analysis_status(analysis_path, "QA_APPROVED")
-        console.print("\n[green][OK] QA APROBADO — status: QA_APPROVED[/green]")
-        get_logger().log_run("qa", "qa", latency_ms=int((time.time() - t0) * 1000), status="ok")
-        return
-    # Discrepancy path: escalate with auto-heal artifacts (alert + pending
-    # action) so the failure is visible in triage and self-repairing.
-    console.print("[yellow]![/yellow] Discrepancias detectadas:")
-    for issue in issues:
-        console.print(f"  - {issue}")
-    alerts_path = os.path.join(".ai", "ALERTS.md")
-    pending_path = os.path.join(".ai", "PENDING.md")
-    alert_id = next_alert_id(alerts_path)
-    insert_alert(alerts_path, {"id": alert_id, "title": f"QA: {issues[0][:60]}", "severity": "P1"}, today_str)
-    ensure_pending_file(pending_path)
-    action_id = next_action_id(pending_path, "ACTION")
-    insert_action(pending_path, {"id": action_id, "title": "Re-ejecutar analyze para corregir métricas", "type": "other", "target": ".ai/ANALYSIS.md", "steps": "Correr `ai-orch analyze` y luego `ai-orch qa`"}, today_str)
-    update_section(analysis_path, "QA Review", f"**Resultado**: ESCALADO\n**Issues**: {'; '.join(issues)}\n**Alerta**: {alert_id} | **Acción**: {action_id}")
-    set_analysis_status(analysis_path, "QA_ESCALATED")
-    console.print(f"\n[yellow][WARN] QA ESCALADO — Alerta {alert_id} y acción {action_id} creadas (auto-heal)[/yellow]")
-    override = typer.confirm("\n¿Aprobar de todas formas? (override humano)", default=False)
-    if override:
-        get_logger().log_run("qa", "qa", latency_ms=int((time.time() - t0) * 1000), status="override_approved")
-        set_analysis_status(analysis_path, "QA_APPROVED")
-        console.print("[green][OK] Override humano — status: QA_APPROVED[/green]")
-    else:
-        set_analysis_status(analysis_path, "HUMAN_REVIEWED")
-        console.print("[yellow][INFO] Revision pendiente -- accion de auto-heal activa en PENDING.md[/yellow]")
-        get_logger().log_run("qa", "qa", latency_ms=int((time.time() - t0) * 1000), status="escalated")
-        raise typer.Exit(1)
+    run_qa(get_logger)
 
 
 @app.command()
@@ -485,6 +415,8 @@ def ide_install(
         raise typer.Exit(1)
     result = write_managed_block("AGENTS.md", AGENTS_MD_BLOCK, title="Agent instructions")
     console.print(f"[green][OK] AGENTS.md {result}[/green] [dim](read by Antigravity, Cursor, Copilot)[/dim]")
+    result = write_managed_block("CLAUDE.md", CLAUDE_MD_BLOCK, title="CLAUDE.md")
+    console.print(f"[green][OK] CLAUDE.md {result}[/green] [dim](@imports the arrival protocol every session)[/dim]")
     if antigravity:
         rule = os.path.join(".agents", "rules", "ai-orch.md")
         os.makedirs(os.path.dirname(rule), exist_ok=True)
@@ -492,6 +424,50 @@ def ide_install(
             f.write(ANTIGRAVITY_RULE)
         console.print(f"[green][OK] Wrote {rule}[/green] [dim](trigger: always_on)[/dim]")
     console.print("[dim]Only the managed block is rewritten — your own text is kept.[/dim]")
+
+
+@app.command()
+def validate(
+    envelope: str = typer.Argument(..., help="Path to a JSON envelope, or the JSON itself"),
+    expect_role: str = typer.Option("", "--role", help="Fail unless the envelope is from this role"),
+):
+    """Validate a structured inter-agent envelope before passing it on."""
+    data, errors = load_envelope(envelope)
+    if not errors:
+        errors = validate_envelope(data)
+        if expect_role and isinstance(data, dict) and data.get("role") != expect_role:
+            errors.append({"field": "role",
+                           "message": f"expected role {expect_role!r}, got {data.get('role')!r}"})
+    if errors:
+        console.print(f"[red][ERROR] Envelope rejected — {len(errors)} violation(s)[/red]")
+        for e in errors:
+            where = f"[bold]{e['field']}[/bold]: " if e["field"] else ""
+            console.print(f"  [red]x[/red] {where}{e['message']}")
+        raise typer.Exit(1)
+    console.print(f"[green][OK] Valid {data['role']} envelope for {data['task_id']}[/green]")
+    console.print(f"[green][OK][/green] Next: [cyan]{next_step(data)}[/cyan]")
+
+
+@app.command()
+def roles():
+    """Show the configured agent roles and their prompt versions."""
+    if not os.path.exists(".ai"):
+        console.print("[red]Error: .ai/ not found. Run 'ai-orch init' first.[/red]")
+        raise typer.Exit(1)
+    versions = role_versions(load_config(os.path.join(".ai", "config.json")))
+    if not versions:
+        console.print("[yellow][WARN] No agent roles configured in .ai/config.json[/yellow]")
+        raise typer.Exit(0)
+    table = Table(title="Agent role prompts", header_style="bold cyan")
+    table.add_column("Role")
+    table.add_column("Prompt version")
+    for name, version in versions:
+        style = "yellow" if version == "unversioned" else "green"
+        table.add_row(name, f"[{style}]{version}[/{style}]")
+    console.print(table)
+    if any(v == "unversioned" for _, v in versions):
+        console.print("[yellow][WARN] Unversioned role prompts cannot be changed safely — "
+                      "add a \"version\" to each agent in .ai/config.json.[/yellow]")
 
 
 if __name__ == "__main__":

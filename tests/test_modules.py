@@ -478,3 +478,123 @@ def test_get_recent_changed_files_raises_without_git(tmp_path):
     _os.chdir(tmp_path)
     with pytest.raises(GitCommandError):
         get_recent_changed_files()
+
+
+# ---------------------------------------------------------------------------
+# pipeline.py — the structured inter-agent contract
+# ---------------------------------------------------------------------------
+
+def _planner(**over):
+    env = {
+        "schema": "ai-orch/v1", "role": "planner", "task_id": "T-1", "status": "ok",
+        "summary": "plan", "next_role": "executor", "evidence": ["read src/"],
+        "steps": [{"id": "S-1", "goal": "do a thing", "done_when": "tests pass"}],
+    }
+    env.update(over)
+    return env
+
+
+def test_valid_planner_envelope_has_no_errors():
+    from aiorch.pipeline import validate_envelope
+    assert validate_envelope(_planner()) == []
+
+
+def test_illegal_transition_is_rejected():
+    from aiorch.pipeline import validate_envelope
+    errs = validate_envelope(_planner(next_role="qa"))
+    assert any(e["field"] == "next_role" for e in errs)
+
+
+def test_nothing_routes_back_to_planner():
+    from aiorch.pipeline import TRANSITIONS
+    assert all("planner" not in targets for targets in TRANSITIONS.values())
+
+
+def test_step_without_done_when_is_rejected():
+    from aiorch.pipeline import validate_envelope
+    errs = validate_envelope(_planner(steps=[{"id": "S-1", "goal": "g"}]))
+    assert any(e["field"] == "steps[0].done_when" for e in errs)
+
+
+def test_duplicate_and_unknown_step_ids_are_rejected():
+    from aiorch.pipeline import validate_envelope
+    dupes = validate_envelope(_planner(steps=[
+        {"id": "S-1", "goal": "a", "done_when": "x"},
+        {"id": "S-1", "goal": "b", "done_when": "y"},
+    ]))
+    assert any("duplicate" in e["message"] for e in dupes)
+    unknown = validate_envelope(_planner(steps=[
+        {"id": "S-1", "goal": "a", "done_when": "x", "depends_on": ["S-9"]},
+    ]))
+    assert any("unknown step id" in e["message"] for e in unknown)
+
+
+def test_ok_status_requires_evidence():
+    from aiorch.pipeline import validate_envelope
+    errs = validate_envelope(_planner(evidence=[]))
+    assert any(e["field"] == "evidence" for e in errs)
+
+
+def test_blocked_status_requires_blocked_on():
+    from aiorch.pipeline import validate_envelope
+    errs = validate_envelope(_planner(status="blocked", evidence=[]))
+    assert any(e["field"] == "blocked_on" for e in errs)
+
+
+def test_qa_cannot_approve_over_a_p0():
+    from aiorch.pipeline import validate_envelope
+    errs = validate_envelope({
+        "schema": "ai-orch/v1", "role": "qa", "task_id": "T-1", "status": "ok",
+        "summary": "s", "next_role": "none", "evidence": ["pytest"],
+        "verdict": "approved",
+        "findings": [{"severity": "P0", "claim": "leak", "evidence": "line 42"}],
+    })
+    assert any(e["field"] == "verdict" for e in errs)
+
+
+def test_qa_finding_requires_evidence():
+    from aiorch.pipeline import validate_envelope
+    errs = validate_envelope({
+        "schema": "ai-orch/v1", "role": "qa", "task_id": "T-1", "status": "ok",
+        "summary": "s", "next_role": "executor", "evidence": ["pytest"],
+        "verdict": "rejected", "findings": [{"severity": "P1", "claim": "slow"}],
+    })
+    assert any(e["field"] == "findings[0].evidence" for e in errs)
+
+
+def test_executor_change_needs_a_reason():
+    from aiorch.pipeline import validate_envelope
+    errs = validate_envelope({
+        "schema": "ai-orch/v1", "role": "executor", "task_id": "T-1", "status": "ok",
+        "summary": "s", "next_role": "qa", "evidence": ["pytest"],
+        "changes": [{"path": "src/a.py", "action": "modified"}],
+    })
+    assert any(e["field"] == "changes[0].why" for e in errs)
+
+
+def test_non_object_envelope_is_rejected_not_crashed():
+    from aiorch.pipeline import validate_envelope
+    assert validate_envelope(["not", "an", "object"])
+    assert validate_envelope(None)
+
+
+def test_load_envelope_reports_bad_json_as_a_violation(tmp_path):
+    from aiorch.pipeline import load_envelope
+    bad = tmp_path / "e.json"
+    bad.write_text("{not json", encoding="utf-8")
+    data, errors = load_envelope(str(bad))
+    assert data is None and errors and "not valid JSON" in errors[0]["message"]
+
+
+def test_next_step_stops_on_blocked_or_failed():
+    from aiorch.pipeline import next_step
+    assert next_step({"status": "ok", "next_role": "qa"}) == "qa"
+    assert next_step({"status": "blocked", "next_role": "qa"}) == "none"
+    assert next_step({"status": "failed", "next_role": "qa"}) == "none"
+
+
+def test_role_versions_flags_unversioned_prompts():
+    from aiorch.pipeline import role_versions
+    got = role_versions({"agents": {"planner": {"version": "1.2.0"}, "executor": {}}})
+    assert got == [("executor", "unversioned"), ("planner", "1.2.0")]
+    assert role_versions({}) == []

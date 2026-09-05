@@ -41,6 +41,12 @@ host workspace's `.ai/AI-ORCHESTRATOR.md` when nested):
 - Log swallowed errors via `aiorch.logs.get_local_logger()` — never `except: pass` silently
 - Keep the `[OK]` / `[WARN]` / `[ERROR]` output prefixes — agents and tests parse them
 - Never add logic to `src/aiorch/_helpers.py` — it is a re-export shim only
+- Agents exchange `ai-orch/v1` JSON envelopes, never prose — validate each handoff
+  with `ai-orch validate`; see [skills/pipeline/SKILL.md](skills/pipeline/SKILL.md)
+- Role prompts in `.ai/config.json` are versioned code: bump `version`, add a
+  `prompt_changelog` line, and evaluate against real cases before replacing one
+- Do not add "think step by step", assistant prefills, `budget_tokens`, or sampling
+  params to prompts — the last three are hard 400s on current models
 
 ## Commands
 
@@ -52,7 +58,7 @@ pip install -e .
 pytest
 pytest tests/test_cli.py::test_init_creates_ai_folder
 
-# CLI (all 16 commands)
+# CLI (all 18 commands)
 ai-orch init              # create .ai/ from templates (8 files)
 ai-orch triage            # alerts + pending + model routing + conflict/secret scan + tests
 ai-orch check             # pre-commit guard: code staged without .ai/ update → exit 1
@@ -67,7 +73,9 @@ ai-orch analyze           # write verifiable metrics report to .ai/ANALYSIS.md
 ai-orch qa                # cross-check ANALYSIS.md vs live state; escalate on mismatch
 ai-orch export            # bundle all .ai/ files to stdout or --out FILE
 ai-orch brief             # render .ai/ as one human-readable status page (--out FILE)
-ai-orch ide-install       # write AGENTS.md + .agents/rules/ for Antigravity/Cursor/Copilot
+ai-orch ide-install       # write AGENTS.md + CLAUDE.md @imports + .agents/rules/
+ai-orch validate          # check a structured inter-agent envelope (--role to pin the sender)
+ai-orch roles             # list agent role prompts and their versions
 ai-orch observe           # show Supabase run metrics (needs SUPABASE_URL/_ANON_KEY)
 ```
 
@@ -93,7 +101,9 @@ under 500 lines — put logic in the domain modules.
 | `lint.py` | WHEELS.md `[LINT-XXX]` rules checked against the git index at pre-commit |
 | `config.py` | forgiving `.ai/config.json` loader (corrupt → `{}` + warning) |
 | `logs.py` | local logger: WARNING+ → stderr, DEBUG+ → `.ai/logs/aiorch.log` |
-| `portability.py` | AGENTS.md / Antigravity rules + the human-readable brief (aggregator) |
+| `pipeline.py` | structured inter-agent envelope: schema, legal transitions, evidence rule |
+| `portability.py` | AGENTS.md / CLAUDE.md imports / Antigravity rules + the brief (aggregator) |
+| `analysis_ui.py` | analyze/qa presentation (takes `get_logger` from main — frozen patch point) |
 | `render.py` | shared Rich rendering lifted out of `main.py` (triage helpers, runs table) |
 | `observability.py` | optional Supabase `agent_runs` logger; never raises, off without env vars |
 | `_helpers.py` | backward-compat re-export shim (frozen public API, incl. `_`-prefixed aliases) |

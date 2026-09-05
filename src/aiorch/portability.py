@@ -67,6 +67,26 @@ Never run `ai-orch handoff` or `ai-orch qa` unattended — both block on stdin.
 Never bypass the pre-commit guard with `--no-verify`; update `.ai/` instead.
 """
 
+# Claude Code reads CLAUDE.md, and `@path` lines there are IMPORTS: the file is
+# pulled into the cached project-context layer every session, instead of relying
+# on an agent knowing to go Read it. This is the mechanism DEC-007 established
+# (commit ce554dc, "closes that discovery gap") and that removing the repo's own
+# .ai/ folder in 30693e1 silently took away without a superseding decision.
+CLAUDE_MD_BLOCK = """## Project context (auto-loaded)
+
+The files below are imported, not just referenced — Claude Code loads them into
+project context every session, so the arrival protocol runs without anyone
+remembering to ask for it.
+
+@.ai/ORCHESTRATOR.md
+@.ai/CONTEXT.md
+@.ai/ALERTS.md
+@.ai/WHEELS.md
+
+`ai-orch triage` is the same information as a single command. Before finishing,
+record the session with `ai-orch sync --note "what you did, where you stopped"`.
+"""
+
 # Antigravity workspace rule. `trigger: always_on` is that IDE's nearest
 # equivalent to a SessionStart hook: it is injected into every agent turn.
 ANTIGRAVITY_RULE = """---

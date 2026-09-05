@@ -1217,3 +1217,107 @@ def test_ide_install_requires_ai_folder(tmp_path):
     os.chdir(tmp_path)
     result = runner.invoke(app, ["ide-install"])
     assert result.exit_code == 1
+
+
+# ---------------------------------------------------------------------------
+# validate / roles / the CLAUDE.md discovery gap
+# ---------------------------------------------------------------------------
+
+_VALID_PLAN = (
+    '{"schema":"ai-orch/v1","role":"planner","task_id":"T-1","status":"ok",'
+    '"summary":"plan","evidence":["read src/"],"next_role":"executor",'
+    '"steps":[{"id":"S-1","goal":"g","done_when":"tests pass"}]}'
+)
+
+
+def test_validate_accepts_a_good_envelope_and_prints_routing(tmp_path):
+    os.chdir(tmp_path)
+    result = runner.invoke(app, ["validate", _VALID_PLAN])
+    assert result.exit_code == 0, result.output
+    assert "[OK]" in result.output
+    assert "executor" in result.output
+
+
+def test_validate_reads_from_a_file(tmp_path):
+    os.chdir(tmp_path)
+    with open("env.json", "w", encoding="utf-8") as f:
+        f.write(_VALID_PLAN)
+    result = runner.invoke(app, ["validate", "env.json"])
+    assert result.exit_code == 0
+
+
+def test_validate_rejects_and_lists_every_violation(tmp_path):
+    os.chdir(tmp_path)
+    bad = '{"schema":"ai-orch/v1","role":"planner","task_id":"T-1","status":"ok","next_role":"qa"}'
+    result = runner.invoke(app, ["validate", bad])
+    assert result.exit_code == 1
+    assert "[ERROR]" in result.output
+    # summary missing, steps missing, evidence missing, illegal transition
+    assert "violation" in result.output
+    assert "next_role" in result.output
+
+
+def test_validate_role_mismatch_fails(tmp_path):
+    os.chdir(tmp_path)
+    result = runner.invoke(app, ["validate", _VALID_PLAN, "--role", "executor"])
+    assert result.exit_code == 1
+    assert "expected role" in result.output
+
+
+def test_validate_bad_json_is_an_error_not_a_crash(tmp_path):
+    os.chdir(tmp_path)
+    result = runner.invoke(app, ["validate", "{not json"])
+    assert result.exit_code == 1
+    assert "[ERROR]" in result.output
+
+
+def test_roles_lists_versioned_prompts(tmp_path):
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    result = runner.invoke(app, ["roles"])
+    assert result.exit_code == 0
+    for role in ("planner", "executor", "qa_reviewer", "analyzer"):
+        assert role in result.output
+
+
+def test_roles_warns_on_unversioned_prompt(tmp_path):
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    with open(".ai/config.json", encoding="utf-8") as f:
+        cfg = json.load(f)
+    cfg["agents"]["planner"].pop("version")
+    with open(".ai/config.json", "w", encoding="utf-8") as f:
+        json.dump(cfg, f)
+    result = runner.invoke(app, ["roles"])
+    assert "[WARN]" in result.output
+    assert "unversioned" in result.output
+
+
+def test_roles_requires_ai_folder(tmp_path):
+    os.chdir(tmp_path)
+    result = runner.invoke(app, ["roles"])
+    assert result.exit_code == 1
+
+
+def test_ide_install_closes_the_claude_md_discovery_gap(tmp_path):
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    result = runner.invoke(app, ["ide-install"])
+    assert result.exit_code == 0
+    claude_md = open("CLAUDE.md", encoding="utf-8").read()
+    # @-prefixed paths are imports, not references — that is the whole point.
+    assert "@.ai/ORCHESTRATOR.md" in claude_md
+    assert "@.ai/ALERTS.md" in claude_md
+    assert "ai-orch:start" in claude_md
+
+
+def test_ide_install_preserves_hand_written_claude_md(tmp_path):
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    with open("CLAUDE.md", "w", encoding="utf-8") as f:
+        f.write("# CLAUDE.md\n\n## House rules\n- Never touch billing/.\n")
+    runner.invoke(app, ["ide-install"])
+    runner.invoke(app, ["ide-install"])
+    claude_md = open("CLAUDE.md", encoding="utf-8").read()
+    assert "Never touch billing/." in claude_md
+    assert claude_md.count("ai-orch:start") == 1

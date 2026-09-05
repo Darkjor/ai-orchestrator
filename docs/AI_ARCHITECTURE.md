@@ -3,7 +3,7 @@
 > **Read this first.** This file is the mental map of the `ai-orchestrator` codebase,
 > written for ANY LLM (Claude, GPT, Gemini, ...) that needs to understand, extend or
 > maintain this project. Every path below is exact and relative to the repo root.
-> Last structural change: cross-IDE portability + non-interactive `sync` (2026-08-31).
+> Last structural change: structured inter-agent pipeline contract (2026-09-05).
 
 ---
 
@@ -40,12 +40,15 @@ skills/
   ai-orch/SKILL.md              # full reference; Claude auto-loads it on context/handoff work
   arrival/SKILL.md              # /ai-orch:arrival — start-of-session protocol
   handoff/SKILL.md              # /ai-orch:handoff — end-of-session protocol
+  pipeline/SKILL.md             # multi-agent production standard (envelopes, roles, versions)
 
 src/aiorch/
-  main.py                       # CLI surface ONLY — 16 Typer commands, Rich rendering
+  main.py                       # CLI surface ONLY — 18 Typer commands, Rich rendering
   handoff_ui.py                 # interactive handoff wizard presentation logic
   render.py                     # shared Rich rendering (triage helpers, observe table)
-  portability.py                # AGENTS.md / .agents rules + human-readable brief
+  portability.py                # AGENTS.md / CLAUDE.md imports / .agents rules + brief
+  pipeline.py                   # structured inter-agent envelope + validation
+  analysis_ui.py                # analyze/qa presentation (logger injected from main)
   models.py                     # TypedDict contracts for every dict crossing modules
   alerts.py                     # ALERTS.md parse / insert / ID sequencing
   pending.py                    # PENDING.md parse / insert / resolve / ID sequencing
@@ -64,9 +67,9 @@ src/aiorch/
     ANALYSIS.md                 # runtime-only: NOT copied by init, written by analyze
 
 tests/
-  test_cli.py                   # 88 CLI tests (CliRunner, real git, no mocking of fs)
+  test_cli.py                   # 98 CLI tests (CliRunner, real git, no mocking of fs)
   test_observability.py         # 14 tests for the Supabase logger
-  test_modules.py               # 33 domain-module tests (gitops, logs, portability, shim)
+  test_modules.py               # 47 domain-module tests (gitops, logs, portability, pipeline, shim)
 ```
 
 ---
@@ -76,7 +79,7 @@ tests/
 ```mermaid
 graph TD
     subgraph "CLI surface"
-        MAIN["src/aiorch/main.py<br/>16 Typer commands"]
+        MAIN["src/aiorch/main.py<br/>18 Typer commands"]
         HANDOFF_UI["src/aiorch/handoff_ui.py<br/>Interactive wizard presentation"]
         RENDER["src/aiorch/render.py<br/>Shared Rich rendering"]
     end
@@ -87,6 +90,7 @@ graph TD
         DECISIONS["decisions.py"]
         ANALYSIS["analysis.py"]
         PORT["portability.py<br/>AGENTS.md · brief"]
+        PIPE["pipeline.py<br/>envelope validation"]
         GITOPS["gitops.py"]
         LINT["lint.py"]
         CONFIG["config.py"]
@@ -98,14 +102,14 @@ graph TD
     end
     SHIM["_helpers.py<br/>compat shim"]
 
-    MAIN --> HANDOFF_UI & RENDER & PORT
+    MAIN --> HANDOFF_UI & RENDER & PORT & PIPE
     MAIN --> ALERTS & PENDING & CONTEXT & DECISIONS & ANALYSIS & GITOPS & LINT & CONFIG
     MAIN --> OBS
     HANDOFF_UI --> CONTEXT & ALERTS & DECISIONS & GITOPS & CONFIG
     ANALYSIS --> ALERTS & PENDING & DECISIONS
     PORT --> ALERTS & PENDING & DECISIONS & CONTEXT
     ALERTS & PENDING & CONTEXT & DECISIONS & ANALYSIS & GITOPS & LINT & CONFIG --> LOGS
-    ALERTS & PENDING & ANALYSIS & LINT --> MODELS
+    ALERTS & PENDING & ANALYSIS & LINT & PIPE --> MODELS
     SHIM -.re-exports.-> ALERTS & PENDING & CONTEXT & DECISIONS & ANALYSIS & GITOPS & LINT & CONFIG
 ```
 
@@ -116,6 +120,8 @@ Dependency rules (enforce these in review):
    import siblings: `analysis.py` (aggregates alerts/pending/decisions) and
    `portability.py` (aggregates alerts/pending/decisions/context for rendering).
    Neither owns a Markdown format — they read through the owning module's parser.
+   `pipeline.py` is not in that category: it imports no sibling at all, because it
+   validates a wire format rather than a file on disk.
 3. `_helpers.py` contains **no logic** — only re-exports. Never add code there.
 4. All `subprocess` calls to git live in `gitops.py` (exceptions: `lint.py` reads the
    git index via `git show`, `analysis.py` runs `pytest`/`git diff` for metrics).
@@ -139,7 +145,9 @@ Dependency rules (enforce these in review):
 | `qa` | `main.py:qa` | analysis, alerts, pending, context | `.ai/ANALYSIS.md` + live state | `.ai/ANALYSIS.md` status; on mismatch also ALERTS + PENDING (auto-heal) |
 | `sync` | `main.py:sync` | gitops, context | git status/HEAD | `.ai/CONTEXT.md` (non-interactive) |
 | `brief` | `main.py:brief` | portability | all `.ai/*` | stdout or `--out` file |
-| `ide-install` | `main.py:ide_install` | portability | — | `AGENTS.md`, `.agents/rules/ai-orch.md` |
+| `ide-install` | `main.py:ide_install` | portability | — | `AGENTS.md`, `CLAUDE.md`, `.agents/rules/ai-orch.md` |
+| `validate` | `main.py:validate` | pipeline | a JSON envelope | exit code (1 = contract violated) |
+| `roles` | `main.py:roles` | pipeline, config | `.ai/config.json` | stdout only |
 | `export` | `main.py:export` | context | all `.ai/*.md` | stdout or `--out` file |
 | `observe` | `main.py:observe` | observability | Supabase `agent_runs` | stdout only |
 
@@ -208,7 +216,7 @@ Agents and tests parse these — keep them.
 
 ---
 
-## 7. Tests are the contract (135 tests)
+## 7. Tests are the contract (159 tests)
 
 - [tests/test_cli.py](../tests/test_cli.py) — CLI behaviour via `typer.testing.CliRunner`
   in `tmp_path` (chdir), with REAL git subprocesses, no filesystem mocking.

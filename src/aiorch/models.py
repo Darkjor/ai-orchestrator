@@ -113,3 +113,30 @@ class ProjectMetrics(TypedDict):
     decisions_count: int
     tests_collected: int
     git_modified: int
+
+
+class EnvelopeError(TypedDict):
+    """One contract violation found in a structured inter-agent envelope.
+
+    ``field`` is a dotted/indexed path into the envelope ("steps[0].done_when")
+    so an agent can fix the exact field without re-reading the whole schema;
+    it is "" for whole-document problems such as invalid JSON.
+    """
+
+    field: str
+    message: str
+
+
+class PipelineStep(TypedDict, total=False):
+    """One decomposed sub-task produced by the planner role.
+
+    ``done_when`` is what separates a step from an intention: it is the
+    condition the executor checks to know it is finished and QA checks to
+    judge whether it was. ``depends_on`` holds ids of earlier steps.
+    """
+
+    id: str
+    goal: str
+    done_when: str
+    depends_on: list[str]
+

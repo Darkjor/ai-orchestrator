@@ -8,6 +8,7 @@ external code (tests, user scripts, older agents' notes) imports from
     aiorch.pending    — PENDING.md parse/insert/resolve/IDs
     aiorch.context    — CONTEXT.md sections, snapshot, export bundle
     aiorch.portability— AGENTS.md / .agents rules, human-readable brief
+    aiorch.pipeline   — structured inter-agent envelope + validation
     aiorch.decisions  — DECISIONS.md append/count
     aiorch.analysis   — analyze/qa metrics pipeline
     aiorch.gitops     — git subprocess wrappers + hook scripts
@@ -53,6 +54,12 @@ from aiorch.gitops import (
     run_git_commit,
     scan_conflict_files,
     get_recent_changed_files,
+)
+from aiorch.pipeline import (
+    load_envelope,
+    next_step,
+    role_versions,
+    validate_envelope,
 )
 from aiorch.portability import (
     AGENTS_MD_BLOCK,
@@ -105,8 +112,10 @@ __all__ = [
     "insert_action",
     "insert_alert",
     "load_config",
+    "load_envelope",
     "next_action_id",
     "next_alert_id",
+    "next_step",
     "parse_alerts",
     "parse_analysis_status",
     "parse_lint_rules",
@@ -115,11 +124,13 @@ __all__ = [
     "read_section",
     "render_brief",
     "resolve_action",
+    "role_versions",
     "run_git_commit",
     "scan_conflict_files",
     "set_analysis_status",
     "update_context",
     "update_section",
+    "validate_envelope",
     "write_analysis_report",
     "write_managed_block",
 ]
