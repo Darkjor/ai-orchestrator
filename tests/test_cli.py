@@ -131,9 +131,13 @@ def test_installed_pre_commit_hook_blocks_and_allows_commit(tmp_path):
     res_block = subprocess.run(["git", "commit", "-m", "add app.py without updating context"], capture_output=True, text=True, encoding="utf-8", env=env)
     assert res_block.returncode != 0
     
-    # 5. Append to .ai/CONTEXT.md, add, commit -> passes
-    with open(".ai/CONTEXT.md", "a", encoding="utf-8") as f:
-        f.write("\n- added app.py\n")
+    # 5. Record real context, add, commit -> passes.
+    # NOTE: this must write INTO a section, not append at EOF. The snapshot is
+    # always the last section (see context.inject_snapshot) and the post-commit
+    # hook rewrites it from the header to EOF, so anything appended below it is
+    # destroyed on the next commit — and, since it is indistinguishable from the
+    # machine-written snapshot, must not satisfy the guard either.
+    runner.invoke(app, ["update", "-s", "Current State", "-v", "- added app.py"])
     subprocess.run(["git", "add", ".ai/CONTEXT.md"], check=True)
     
     res_pass = subprocess.run(["git", "commit", "-m", "add app.py and update context"], capture_output=True, text=True, encoding="utf-8", env=env)
@@ -1374,3 +1378,33 @@ def test_setup_flags_can_skip_parts(tmp_path):
     assert os.path.exists(".ai/CONTEXT.md")
     assert not os.path.exists(".git/hooks/pre-commit")
     assert not os.path.exists("AGENTS.md")
+
+
+def test_snapshot_alone_does_not_satisfy_the_commit_guard(tmp_path):
+    """The post-commit snapshot must never stand in for a real handoff."""
+    os.chdir(tmp_path)
+    subprocess.run(["git", "init"], check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "t@e.co"], check=True)
+    subprocess.run(["git", "config", "user.name", "T"], check=True)
+    os.makedirs("src", exist_ok=True)
+    with open("src/a.py", "w", encoding="utf-8") as f:
+        f.write("def a():\n    pass\n")
+    runner.invoke(app, ["setup"])
+    subprocess.run(["git", "add", "-A"], check=True)
+    subprocess.run(["git", "commit", "-m", "init"], check=True, capture_output=True)
+    # post-commit has now rewritten CONTEXT.md's snapshot, leaving it dirty.
+    with open("src/a.py", "a", encoding="utf-8") as f:
+        f.write("def b():\n    pass\n")
+    subprocess.run(["git", "add", "-A"], check=True)
+
+    assert runner.invoke(app, ["check"]).exit_code == 1, "guard accepted a snapshot as context"
+
+    runner.invoke(app, ["sync", "--note", "added b(); stopped before tests"])
+    subprocess.run(["git", "add", "-A"], check=True)
+    assert runner.invoke(app, ["check"]).exit_code == 0
+
+
+def test_init_gitignores_the_runtime_log(tmp_path):
+    os.chdir(tmp_path)
+    runner.invoke(app, ["init"])
+    assert "logs/" in open(os.path.join(".ai", ".gitignore"), encoding="utf-8").read()

@@ -15,6 +15,7 @@ from aiorch.config import load_config
 from aiorch.context import generate_snapshot, inject_snapshot, update_context
 from aiorch.decisions import append_decision
 from aiorch.gitops import run_git_commit
+from aiorch.logs import mark_session_recorded
 from aiorch.models import AlertDraft, DecisionDraft
 
 console = Console()
@@ -101,6 +102,7 @@ def run_handoff_wizard(with_snapshot: bool) -> None:
 
     context_path = os.path.join(".ai", "CONTEXT.md")
     if update_context(context_path, today_str, accomplishments, changed_files):
+        mark_session_recorded()
         console.print("[green][OK] Updated .ai/CONTEXT.md[/green]")
 
     if new_alert_data:

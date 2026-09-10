@@ -59,3 +59,43 @@ def get_local_logger() -> logging.Logger:
 
     _configured = True
     return logger
+
+
+# Written by the commands that record context (sync / update / handoff) and
+# cleared by the SessionStart hook. The Stop hook reads it to answer "did
+# anyone record this session?" directly, instead of inferring it from git —
+# where a machine-written snapshot looks identical to a real handoff.
+RECORDED_MARKER = os.path.join(LOG_DIR, ".session-recorded")
+
+
+def mark_session_recorded() -> None:
+    """Note that context was written this session. Never raises."""
+    try:
+        os.makedirs(LOG_DIR, exist_ok=True)
+        with open(RECORDED_MARKER, "w", encoding="utf-8") as f:
+            f.write("")
+    except OSError as exc:
+        get_local_logger().debug("mark_session_recorded failed: %s", exc)
+
+
+# `init` writes this so the runtime log and the session markers never enter
+# git. Without it they show up as untracked files under .ai/, and a `git add -A`
+# stages machine-written noise that then satisfies the commit guard — the guard
+# would pass on a commit where nobody recorded anything.
+AI_GITIGNORE = """# Runtime files written by ai-orch — never commit these.
+logs/
+"""
+
+
+def write_ai_gitignore(ai_dir: str = ".ai") -> bool:
+    """Write .ai/.gitignore unless one already exists. Never raises."""
+    path = os.path.join(ai_dir, ".gitignore")
+    if os.path.exists(path):
+        return False
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(AI_GITIGNORE)
+        return True
+    except OSError as exc:
+        get_local_logger().debug("write_ai_gitignore failed: %s", exc)
+        return False

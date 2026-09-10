@@ -234,3 +234,21 @@ def get_recent_changed_files(limit: int = 25) -> list[str]:
             return []
 
     return sorted(dict.fromkeys(files))[:limit]
+
+
+def read_blob(ref_path: str) -> str | None:
+    """Return the content of ``git show <ref>:<path>``, or None if absent.
+
+    None means "not in that tree" — a new file staged for the first time, or a
+    repo with no HEAD yet. Callers treat that as "everything is new", which is
+    the safe reading for the commit guard.
+    """
+    try:
+        res = subprocess.run(
+            ["git", "show", ref_path],
+            capture_output=True, text=True, check=True, timeout=10,
+        )
+    except (subprocess.CalledProcessError, OSError, subprocess.TimeoutExpired) as exc:
+        get_local_logger().debug("read_blob: %s unavailable: %s", ref_path, exc)
+        return None
+    return res.stdout

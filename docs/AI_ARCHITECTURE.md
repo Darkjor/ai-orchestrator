@@ -68,9 +68,9 @@ src/aiorch/
     ANALYSIS.md                 # runtime-only: NOT copied by init, written by analyze
 
 tests/
-  test_cli.py                   # 102 CLI tests (CliRunner, real git, no mocking of fs)
+  test_cli.py                   # 104 CLI tests (CliRunner, real git, no mocking of fs)
   test_observability.py         # 14 tests for the Supabase logger
-  test_modules.py               # 47 domain-module tests (gitops, logs, portability, pipeline, shim)
+  test_modules.py               # 55 domain-module tests (gitops, logs, portability, pipeline, shim)
 ```
 
 ---
@@ -135,7 +135,7 @@ Dependency rules (enforce these in review):
 | --- | --- | --- | --- | --- |
 | `init` | `main.py:init` | — | `src/aiorch/templates/*` | `.ai/*` (8 files) |
 | `triage` | `main.py:triage` | alerts, pending, config, gitops | `.ai/ALERTS.md`, `.ai/PENDING.md`, `.ai/config.json`, git | stdout only |
-| `check` | `main.py:check` | gitops, lint | git index, `.ai/WHEELS.md` | exit code (1 blocks commit) |
+| `check` | `main.py:check` | gitops, context, lint | git index, `.ai/WHEELS.md` | exit code (1 blocks commit) |
 | `hook-install` | `main.py:hook_install` | gitops | — | `.git/hooks/pre-commit`, `.git/hooks/post-commit` |
 | `handoff` | `handoff_ui.py` | context, alerts, decisions, gitops | prompts | `.ai/CONTEXT.md`, `.ai/ALERTS.md`, `.ai/DECISIONS.md`, git commit |
 | `snapshot` | `main.py:snapshot` | context | `src/**/*.py` (AST) | `.ai/CONTEXT.md` (## Codebase Snapshot) |
@@ -218,7 +218,7 @@ Agents and tests parse these — keep them.
 
 ---
 
-## 7. Tests are the contract (163 tests)
+## 7. Tests are the contract (173 tests)
 
 - [tests/test_cli.py](../tests/test_cli.py) — CLI behaviour via `typer.testing.CliRunner`
   in `tmp_path` (chdir), with REAL git subprocesses, no filesystem mocking.

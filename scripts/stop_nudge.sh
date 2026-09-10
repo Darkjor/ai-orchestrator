@@ -25,22 +25,25 @@
 MARKER=".ai/logs/.stop-nudged"
 [ -f "$MARKER" ] && exit 0
 
+# Did anyone actually record this session? `sync`, `update` and `handoff`
+# write this marker; SessionStart clears it. Asking directly beats inferring
+# it from git, where the post-commit snapshot rewrites CONTEXT.md and looks
+# exactly like a real handoff — which is how the guard used to be fooled.
+[ -f ".ai/logs/.session-recorded" ] && exit 0
+
 command -v git >/dev/null 2>&1 || exit 0
 git rev-parse --git-dir >/dev/null 2>&1 || exit 0
 
 STATUS=$(git status --porcelain 2>/dev/null) || exit 0
 [ -z "$STATUS" ] && exit 0
 
-# Did the session touch code without touching the context folder?
+# Any code change at all? .ai/ is excluded because whether the context was
+# recorded is answered by the marker above, not by the diff.
 # `grep -c` already prints 0 on no match, so no `|| echo 0` fallback: that
 # would append a second number, break the numeric test, and — because stdout
 # IS the hook protocol here — corrupt the JSON below.
-PATHS=$(printf '%s\n' "$STATUS" | cut -c4- | grep -v '^$')
-CODE=$(printf '%s\n' "$PATHS" | grep -vc '^\.ai/')
-CONTEXT=$(printf '%s\n' "$PATHS" | grep -c '^\.ai/')
-
+CODE=$(printf '%s\n' "$STATUS" | cut -c4- | grep -v '^$' | grep -vc '^\.ai/')
 [ "$CODE" -eq 0 ] && exit 0
-[ "$CONTEXT" -gt 0 ] && exit 0
 
 # Marker first — see LOOP SAFETY above.
 mkdir -p ".ai/logs" 2>/dev/null || exit 0

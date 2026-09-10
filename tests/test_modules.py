@@ -598,3 +598,79 @@ def test_role_versions_flags_unversioned_prompts():
     got = role_versions({"agents": {"planner": {"version": "1.2.0"}, "executor": {}}})
     assert got == [("executor", "unversioned"), ("planner", "1.2.0")]
     assert role_versions({}) == []
+
+
+# ---------------------------------------------------------------------------
+# The commit guard must not accept machine-written changes as a record
+# ---------------------------------------------------------------------------
+
+_BASE_CONTEXT = "## Current State\n\nreal content\n"
+
+
+def _with_snapshot(base):
+    """Mimic inject_snapshot: separator rule, then the generated section."""
+    return base.rstrip() + "\n\n---\n\n## Codebase Snapshot\n\n- src/a.py: fn\n"
+
+
+def test_strip_snapshot_also_drops_the_separator_rule():
+    from aiorch.context import strip_snapshot
+    # The rule inject_snapshot writes must go too, or an otherwise-identical
+    # file compares as changed and the guard is fooled.
+    assert strip_snapshot(_with_snapshot(_BASE_CONTEXT)) == strip_snapshot(_BASE_CONTEXT)
+
+
+def test_strip_snapshot_keeps_a_rule_the_user_wrote():
+    from aiorch.context import strip_snapshot
+    assert "---" in strip_snapshot("## A\ntext\n\n---\n\n## B\nmore\n")
+
+
+def test_snapshot_only_change_does_not_count_as_recorded():
+    from aiorch.context import staged_context_records_something
+    assert not staged_context_records_something(_with_snapshot(_BASE_CONTEXT), _BASE_CONTEXT)
+
+
+def test_real_edit_alongside_a_snapshot_still_counts():
+    from aiorch.context import staged_context_records_something
+    edited = _with_snapshot("## Current State\n\nstopped at the JWT refresh\n")
+    assert staged_context_records_something(edited, _BASE_CONTEXT)
+
+
+def test_missing_blobs_count_as_recorded():
+    from aiorch.context import staged_context_records_something
+    # Nothing to compare against (first commit, new file) — the safe reading.
+    assert staged_context_records_something(None, _BASE_CONTEXT)
+    assert staged_context_records_something(_BASE_CONTEXT, None)
+
+
+def test_guard_ignores_snapshot_and_logs_but_sees_real_context():
+    from aiorch.context import classify_staged_paths
+    same = lambda ref: _with_snapshot(_BASE_CONTEXT) if ref.startswith(":") else _BASE_CONTEXT
+
+    # Code + a snapshot-only CONTEXT.md + the tool's own log = nothing recorded.
+    code, recorded = classify_staged_paths(
+        ["src/a.py", ".ai/CONTEXT.md", ".ai/logs/aiorch.log"], same)
+    assert code and not recorded
+
+    # The same staging plus a real ALERTS.md edit does count.
+    code, recorded = classify_staged_paths(
+        ["src/a.py", ".ai/CONTEXT.md", ".ai/ALERTS.md"], same)
+    assert code and recorded
+
+
+def test_guard_exempts_docs_and_packaging():
+    from aiorch.context import classify_staged_paths
+    code, recorded = classify_staged_paths(
+        ["docs/API.md", ".gitignore", "pyproject.toml"], lambda r: None)
+    assert not code and not recorded
+
+
+def test_init_writes_ai_gitignore_and_never_clobbers_one(tmp_path):
+    import os as _os
+    from aiorch.logs import write_ai_gitignore
+    ai = tmp_path / ".ai"
+    ai.mkdir()
+    assert write_ai_gitignore(str(ai)) is True
+    assert "logs/" in (ai / ".gitignore").read_text(encoding="utf-8")
+    (ai / ".gitignore").write_text("mine\n", encoding="utf-8")
+    assert write_ai_gitignore(str(ai)) is False
+    assert (ai / ".gitignore").read_text(encoding="utf-8") == "mine\n"

@@ -41,6 +41,9 @@ host workspace's `.ai/AI-ORCHESTRATOR.md` when nested):
 - Log swallowed errors via `aiorch.logs.get_local_logger()` — never `except: pass` silently
 - Keep the `[OK]` / `[WARN]` / `[ERROR]` output prefixes — agents and tests parse them
 - Never add logic to `src/aiorch/_helpers.py` — it is a re-export shim only
+- Machine-written content never satisfies the commit guard: `## Codebase Snapshot`
+  and `.ai/logs/` are excluded in `context.classify_staged_paths`. Anything the
+  tool writes about itself is not a record of anything
 - Agents exchange `ai-orch/v1` JSON envelopes, never prose — validate each handoff
   with `ai-orch validate`; see [skills/pipeline/SKILL.md](skills/pipeline/SKILL.md)
 - Role prompts in `.ai/config.json` are versioned code: bump `version`, add a
@@ -95,7 +98,7 @@ under 500 lines — put logic in the domain modules.
 | `models.py` | TypedDict contracts (`Alert`, `PendingAction`, `LintRule`, `ProjectMetrics`, ...) |
 | `alerts.py` | ALERTS.md parsing/insertion; IDs never reused after resolution |
 | `pending.py` | PENDING.md actions lifecycle (insert → resolve → ## DONE) |
-| `context.py` | CONTEXT.md section editing, AST snapshot, export bundle |
+| `context.py` | CONTEXT.md section editing, AST snapshot, export bundle, guard classification |
 | `decisions.py` | DECISIONS.md append-only decision log |
 | `analysis.py` | analyze→qa anti-hallucination pipeline (status: PENDING→QA_APPROVED/ESCALATED) |
 | `gitops.py` | every git subprocess + hook scripts; queries raise `GitCommandError` |

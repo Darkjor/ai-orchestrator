@@ -71,3 +71,14 @@ def render_runs_table(runs: list) -> Table:
             str(row.get("eval_score") or ""),
         )
     return table
+
+
+def render_roles_table(versions: list) -> Table:
+    """Build the Rich table for `ai-orch roles` from (role, version) pairs."""
+    table = Table(title="Agent role prompts", header_style="bold cyan")
+    table.add_column("Role")
+    table.add_column("Prompt version")
+    for name, version in versions:
+        style = "yellow" if version == "unversioned" else "green"
+        table.add_row(name, f"[{style}]{version}[/{style}]")
+    return table

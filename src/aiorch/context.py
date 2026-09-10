@@ -12,6 +12,8 @@ import ast as _ast
 import os
 import re
 
+from typing import Callable, Optional
+
 from aiorch.logs import get_local_logger
 
 _RE_HEADING = re.compile(r"^#{1,4}\s")
@@ -59,6 +61,76 @@ def update_section(filepath: str, section: str, value: str) -> bool:
     with open(filepath, "w", encoding="utf-8") as f:
         f.writelines(new_lines)
     return True
+
+
+SNAPSHOT_HEADER = "## Codebase Snapshot"
+
+
+def strip_snapshot(text: str) -> str:
+    """Return CONTEXT.md content with the machine-generated snapshot removed.
+
+    WHY this exists: the post-commit hook rewrites ``## Codebase Snapshot`` on
+    every commit, which leaves CONTEXT.md dirty without anyone having recorded
+    anything. `ai-orch check` asks "did a human or agent write context?", and
+    a regenerated symbol map is not an answer to that question — staging it
+    would otherwise satisfy the guard with zero real content. Comparing the
+    stripped text answers the question the guard actually means to ask.
+    """
+    head, sep, _ = text.partition(SNAPSHOT_HEADER)
+    # inject_snapshot writes "\n\n---\n\n" before the header, so the rule has
+    # to go too — otherwise a file whose ONLY change is the snapshot still
+    # compares as different, which is exactly the bug this function exists to
+    # prevent.
+    return re.sub(r"\n-{3,}[ \t]*$", "", (head if sep else text).rstrip()).rstrip()
+
+
+def staged_context_records_something(staged: str | None, committed: str | None) -> bool:
+    """True when a staged CONTEXT.md carries more than a regenerated snapshot.
+
+    The commit guard means to ask "did a human or agent write context?". The
+    post-commit hook rewrites ``## Codebase Snapshot`` after every commit, so
+    without this a `git add -A` would stage that machine-written change and
+    satisfy the guard with no real content behind it.
+
+    Missing blobs (a first commit, a newly added file) count as real: the safe
+    reading when there is nothing to compare against is that it is new.
+    """
+    if staged is None or committed is None:
+        return True
+    return strip_snapshot(staged) != strip_snapshot(committed)
+
+
+# Paths the guard never counts as "code changed" — docs and packaging metadata.
+_GUARD_EXEMPT_PREFIXES = (".git", "docs/")
+_GUARD_EXEMPT_FILES = (".gitignore", "pyproject.toml")
+
+
+def classify_staged_paths(
+    staged_files: list[str],
+    read_blob: Callable[[str], Optional[str]],
+) -> tuple[bool, bool]:
+    """Return (code_changed, context_recorded) for the commit guard.
+
+    ``read_blob`` is injected rather than imported so this module keeps to the
+    dependency rule that only the aggregator modules import siblings — and so
+    the rule below is testable without a git repo.
+    """
+    code_changed = False
+    context_recorded = False
+    for f in staged_files:
+        if f.startswith(".ai/"):
+            # Runtime noise the tool writes about itself is never a record.
+            # Projects initialized before .ai/.gitignore existed may still
+            # have these tracked, so the guard rejects them here too.
+            if f.startswith(".ai/logs/"):
+                continue
+            if f == ".ai/CONTEXT.md" and not staged_context_records_something(
+                    read_blob(":.ai/CONTEXT.md"), read_blob("HEAD:.ai/CONTEXT.md")):
+                continue
+            context_recorded = True
+        elif not f.startswith(_GUARD_EXEMPT_PREFIXES) and f not in _GUARD_EXEMPT_FILES:
+            code_changed = True
+    return code_changed, context_recorded
 
 
 def read_section(filepath: str, section: str) -> str:

@@ -24,14 +24,16 @@ from rich.table import Table
 from aiorch.alerts import insert_alert, next_alert_id, parse_alerts
 from aiorch.analysis_ui import run_analyze, run_qa
 from aiorch.config import load_config
-from aiorch.context import (bundle_context, generate_snapshot,
-                            inject_snapshot, update_context, update_section)
+from aiorch.context import (bundle_context, classify_staged_paths,
+                            generate_snapshot, inject_snapshot, update_context,
+                            update_section)
 from aiorch.gitops import (POST_COMMIT_HOOK, PRE_COMMIT_HOOK, GitCommandError,
                            find_secret_files, get_recent_changed_files,
-                           get_staged_files, has_merge_conflicts,
+                           get_staged_files, has_merge_conflicts, read_blob,
                            scan_conflict_files, write_git_hook)
 from aiorch.handoff_ui import run_handoff_wizard
 from aiorch.lint import check_staged_lint, parse_lint_rules
+from aiorch.logs import mark_session_recorded, write_ai_gitignore
 from aiorch.observability import get_logger
 from aiorch.portability import (AGENTS_MD_BLOCK, ANTIGRAVITY_RULE,
                                 CLAUDE_MD_BLOCK, render_brief,
@@ -40,8 +42,8 @@ from aiorch.pipeline import (load_envelope, next_step, role_versions,
                              validate_envelope)
 from aiorch.pending import (ensure_pending_file, insert_action,
                             next_action_id, parse_pending, resolve_action)
-from aiorch.render import (_print_model_recommendations,
-                           _run_configured_tests, render_runs_table)
+from aiorch.render import (_print_model_recommendations, _run_configured_tests,
+                           render_roles_table, render_runs_table)
 
 app = typer.Typer(help="Global AI Orchestrator CLI")
 console = Console()
@@ -67,6 +69,7 @@ def init():
             continue
         shutil.copy(os.path.join(template_dir, filename), os.path.join(".ai", filename))
 
+    write_ai_gitignore()
     console.print("[green]Successfully initialized .ai/ orchestrator folder![/green]")
 
 
@@ -155,14 +158,7 @@ def check():
     if not staged_files:
         raise typer.Exit(0)
 
-    codebase_changed = False
-    ai_changed = False
-    for f in staged_files:
-        if f.startswith(".ai/"):
-            ai_changed = True
-        elif not any(f.startswith(prefix) for prefix in [".git", "docs/"]):
-            if f not in [".gitignore", "pyproject.toml"]:
-                codebase_changed = True
+    codebase_changed, ai_changed = classify_staged_paths(staged_files, read_blob)
 
     if codebase_changed and not ai_changed:
         console.print(Panel(
@@ -240,6 +236,7 @@ def update(
         raise typer.Exit(1)
     filepath = os.path.join(".ai", file)
     if update_section(filepath, section, value):
+        mark_session_recorded()
         console.print(f"[green][OK] Updated '{section}' in {file}[/green]")
     else:
         console.print(f"[red]Error: Section '{section}' not found in {filepath}[/red]")
@@ -372,6 +369,7 @@ def sync(
     if not update_context(context_path, today, note, ", ".join(changed)):
         console.print("[red]Error: .ai/CONTEXT.md not found.[/red]")
         raise typer.Exit(1)
+    mark_session_recorded()
     console.print(f"[green][OK] Recorded {len(changed)} changed file(s) in CONTEXT.md[/green]")
     if not note:
         console.print("[yellow][WARN] No --note given: git says WHAT changed, only you know WHY.[/yellow]")
@@ -458,13 +456,7 @@ def roles():
     if not versions:
         console.print("[yellow][WARN] No agent roles configured in .ai/config.json[/yellow]")
         raise typer.Exit(0)
-    table = Table(title="Agent role prompts", header_style="bold cyan")
-    table.add_column("Role")
-    table.add_column("Prompt version")
-    for name, version in versions:
-        style = "yellow" if version == "unversioned" else "green"
-        table.add_row(name, f"[{style}]{version}[/{style}]")
-    console.print(table)
+    console.print(render_roles_table(versions))
     if any(v == "unversioned" for _, v in versions):
         console.print("[yellow][WARN] Unversioned role prompts cannot be changed safely — "
                       "add a \"version\" to each agent in .ai/config.json.[/yellow]")
